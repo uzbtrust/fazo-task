@@ -1,0 +1,12 @@
+node_modules/
+.next/
+.vercel/
+.env*
+!.env.example
+*.db
+*.db-shm
+*.db-wal
+*.tsbuildinfo
+test-results/
+.DS_Store
+.vercel
