@@ -1,5 +1,5 @@
 import { NextResponse } from "next/server";
-import type { Role, User } from "./types";
+import type { Account } from "./types";
 import type { Row } from "./db";
 
 export class ApiError extends Error {
@@ -82,26 +82,13 @@ export function text(
   return clean;
 }
 
-export function role(value: unknown): Role {
-  if (value !== "admin" && value !== "creator" && value !== "designer")
-    throw new ApiError(400, "Rol noto‘g‘ri tanlangan.");
-  return value;
-}
-
-export function publicUser(row: Row): User {
+export function publicAccount(row: Row): Account {
   return {
     id: String(row.id),
     name: String(row.name),
     username: String(row.username),
-    role: row.role as Role,
-    active: Boolean(row.active),
     createdAt: String(row.created_at),
   };
-}
-
-export function allow(user: User, roles: Role[]) {
-  if (!roles.includes(user.role))
-    throw new ApiError(403, "Bu amal uchun ruxsatingiz yo‘q.");
 }
 
 export function newPassword(value: unknown): string {

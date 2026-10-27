@@ -1,11 +1,27 @@
 # Fazo Task — dizayn asosi
 
-Asosiy manba: [uzbtrust/mankiw-chapters](https://github.com/uzbtrust/mankiw-chapters), ayniqsa `docs/DESIGN.md` va `src/css/00-tokens.css` (2026-10-26 holati).
+Asosiy manba: [uzbtrust/mankiw-chapters](https://github.com/uzbtrust/mankiw-chapters), ayniqsa `docs/DESIGN.md`, `src/css/00-tokens.css`, `20-chrome.css` va `30-landing.css`. Tokenlar `src/app/globals.css` boshida o‘sha nomlar bilan takrorlangan.
 
-Fazo Task shu vizual tilni dizaynerlar ish paneliga moslashtiradi: tizim San Francisco shrifti, oq `#ffffff` va kulrang `#f5f5f7` yuzalar, asosiy matn `#1d1d1f`, ikkilamchi matn `#6e6e73`, asosiy urg‘u `#0071e3`. Tashqi shrift va ikonka CDN ishlatilmaydi.
+## Til: "Apple, quietly"
 
-Katta sarlavhalar, qisqa va tushunarli o‘zbekcha matn, 8px ritm, yumshoq radiuslar va kapsula shaklidagi asosiy tugmalar saqlanadi. Rang vazifa holatini tushuntiradi; holatlar matn bilan ham ko‘rsatiladi. Fazo belgisi koddagi SVG orqali yaratiladi.
+- **Bo‘sh joy — dizayn.** Katta vertikal ritm, qisqa satrlar. Shubha bo‘lsa, chiziq yoki qutini olib tashlang.
+- **Tipografiya ishni bajaradi.** Tizim San Francisco shrifti, katta sarlavha (700, `--track-hero`) va uning ostida kulrang `.dim` davomi; ikkilamchi matn `--fg-3`; raqamlar `tabular-nums`.
+- **Chiziq emas, yuza.** Kartalar `--card` (yorug‘da `#f5f5f7`, qorong‘uda `#1c1c1e`), radius 24px, chegarasiz. Ingichka chiziq faqat ro‘yxat qatorlari orasida.
+- **Shisha yuqori panel.** `--glass` + `backdrop-filter: saturate(180%) blur(20px)`. Markazda "Vazifalar / Hodimlar" segmentli tanlovi.
+- **Bitta urg‘u rangi** `--accent` (Apple ko‘k). Semantik ranglar faqat ma’no uchun: `--bad` — kechikkan/shoshilinch, `--warn` — bugun/muhim. Holat rang bilan bir qatorda shakl (doiracha) va matn bilan ham ko‘rsatiladi.
+- **Pill tugmalar.** Asosiy amal — to‘ldirilgan ko‘k pill, ikkilamchi — yumshoq ko‘k yoki `.link-more ›`.
 
-Interfeys avvalo ish uchun: ochiq vazifani topish, briefni o‘qish, ishni olish, natijani topshirish va fikrga javob berish. Admin uchun jamoa boshqaruvi va haqiqiy ma’lumotlarga asoslangan hisoblar mavjud. Bo‘sh holatlar ishni qayerdan boshlashni tushuntiradi; sun’iy statistika yoki xodimlar ko‘rsatilmaydi.
+## Ekranlar
 
-Yorug‘ va qorong‘u mavzu, mobil navigatsiya, klaviatura fokusi, dialogni Escape bilan yopish va kamaytirilgan harakat sozlamasi qo‘llanadi.
+- **Kirish:** mankiw-chapters bosh sahifasi kabi markazlashgan hero, ostida Apple ID uslubidagi birlashgan login/parol maydoni.
+- **Vazifalar:** sarlavha + raqamlar qatori (bob sarlavhasidagi "facts" kabi; bosilganda saralaydi), so‘ng holat bo‘yicha guruhlangan "inset" ro‘yxat. Doiracha: bo‘sh → yarim → belgi.
+- **Hodimlar:** bob kartalari uslubidagi kartalar — katta raqam (faol vazifalar), ism, lavozim, bajarilganlik chizig‘i.
+- **Dialoglar:** markazda varaq; telefonda pastdan chiqadigan varaq. Ochilishda masshtab + xiralik, yopilishda qisqa qaytish.
+
+## Harakat
+
+Faqat `transform` va `opacity`. Kirish — 26px ko‘tarilish va 70ms zinapoya; segment indikatori sirpanadi; raqamlar sanab chiqadi; mavzu almashinuvi View Transitions bilan. `prefers-reduced-motion` barcha harakatni o‘chiradi.
+
+## Tekshiruv
+
+Yorug‘ va qorong‘u, 375 / 768 / 1440 px, klaviatura fokusi, Escape bilan dialog yopilishi, gorizontal skroll yo‘qligi.

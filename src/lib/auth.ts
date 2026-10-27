@@ -6,8 +6,8 @@ import {
   timingSafeEqual,
 } from "node:crypto";
 import { db, passwordHash } from "./db";
-import { ApiError, publicUser } from "./server";
-import type { User } from "./types";
+import { ApiError, publicAccount } from "./server";
+import type { Account } from "./types";
 
 export const SESSION_COOKIE = "fazo_session";
 export const tokenHash = (token: string) =>
@@ -27,19 +27,20 @@ export function checkPassword(password: string, stored: string): boolean {
   }
 }
 
-export async function currentUser(): Promise<User | null> {
+export async function currentUser(): Promise<Account | null> {
   const token = (await cookies()).get(SESSION_COOKIE)?.value;
   if (!token || !/^[a-f0-9]{64}$/.test(token)) return null;
   const database = await db();
   const result = await database.execute({
     sql: `SELECT u.* FROM sessions s JOIN users u ON s.user_id=u.id
-      WHERE s.token_hash=? AND s.expires_at>? AND u.active=1`,
+      WHERE s.token_hash=? AND s.expires_at>? AND u.active=1 AND u.deleted_at IS NULL
+        AND u.role='admin'`,
     args: [tokenHash(token), new Date().toISOString()],
   });
-  return result.rows[0] ? publicUser(result.rows[0]) : null;
+  return result.rows[0] ? publicAccount(result.rows[0]) : null;
 }
 
-export async function requireUser(): Promise<User> {
+export async function requireUser(): Promise<Account> {
   const user = await currentUser();
   if (!user) throw new ApiError(401, "Davom etish uchun hisobingizga kiring.");
   return user;

@@ -6,23 +6,27 @@ Run the suite against an already running application and a disposable database:
 npm run test:integration
 ```
 
-The default target is `http://127.0.0.1:3000`. Set `BASE_URL` to use a different local port. `ADMIN_USERNAME` and `ADMIN_PASSWORD` override the initial `admin` account credentials. The test never prints credentials, session values, or uploaded private data.
+The default target is `http://127.0.0.1:3000`. Set `BASE_URL` for a different server. `ADMIN_USERNAME` and `ADMIN_PASSWORD` override the sign-in account (default `admin` / `admin`). The test prints a unique run prefix and generated IDs; it never prints credentials or session values.
 
-The suite creates four uniquely named QA accounts and two task fixtures. It checks private API access, secure cookie attributes, role permissions, cross-site mutation protection, safe user profiles, and simultaneous claims by two designers. It then exercises submission, requested changes, resubmission, creator approval, designer completion, file-only briefs, byte-for-byte file downloads, upload ownership, comments, task release/edit/cancellation, account deactivation, last-admin protection, and logout.
+The suite creates two QA employees and two tasks. Its checks cover:
 
-Fixture accounts are deactivated in the cleanup path, including after a failure. The suite prints a `FIXTURES` JSON record containing the exact prefix and generated IDs. Tasks remain marked with that unique `QA` prefix until explicit cleanup. Use a disposable local database for repeat runs.
+- Anonymous access to `/api/me`, `/api/tasks` and `/api/employees` returns `401`; retired `/api/users` and `/api/files` return `404`.
+- Sign-in returns the account without its password hash; the session cookie is `HttpOnly` and `SameSite=Lax`; cross-site mutations return `403`; logout revokes the session.
+- Employee creation and partial edits; blank names, over-long positions and non-object JSON return `400`.
+- Task validation: missing or unknown assignee, empty title, priority outside the integers `1`–`3`, legacy status values and impossible dates return `400`.
+- Partial task updates keep untouched fields. Moving to `done` records `completedAt`, edits keep it, reopening clears it. Due dates can be cleared and tasks reassigned.
+- An employee with unfinished tasks cannot be deleted (`409`). After the work is done, deletion hides the employee from the roster, the completed task keeps the employee's name, and new assignments to that employee return `400`.
+- Task deletion, wrong current password and short new password.
 
-To remove only one run's generated fixtures, pass its exact prefix to the ownership-checked cleanup helper. It verifies QA usernames, names, and task creators, and rolls back if a fixture account is involved in an unrelated task:
+The suite deletes its tasks and soft-deletes its employees when it finishes. A `FIXTURES` JSON line is always printed with its `prefix`, `employeeIds` and `taskIds`. To physically remove one run's soft-deleted employees as well:
 
 ```sh
-node scripts/cleanup-test-fixtures.mjs qa_EXACT_PREFIX_FROM_OUTPUT
+node scripts/cleanup-test-fixtures.mjs ACTUAL_QA_PREFIX_FROM_OUTPUT
 ```
 
-The placeholder above must be replaced with the actual alphanumeric `qa...` prefix. The helper uses `TURSO_DATABASE_URL` and `TURSO_AUTH_TOKEN` if explicitly loaded, otherwise the local `fazo.db`. Do not load production credentials for a local test cleanup.
+The helper only touches rows whose names start with `QA <prefix>`, refuses to run if a fixture task belongs to a real employee or a fixture employee has unrelated tasks, and deletes everything in one transaction. It uses `TURSO_DATABASE_URL` and `TURSO_AUTH_TOKEN` when explicitly loaded, otherwise local `fazo.db`.
 
-Remote targets require the explicit `TEST_ALLOW_REMOTE=1` setting because the suite writes real fixtures. Do not point the suite at a workspace containing real employee data. A production smoke check can instead verify the login page, unauthenticated API responses, authenticated admin profile, roster, and task list without creating fixtures.
-
-The optional `TEST_ADMIN_PASSWORD_CHANGE=1` test is limited to a local target and requires a scratch `ADMIN_PASSWORD` of at least eight characters so it can be restored under the password policy. It changes that password, verifies a fresh login, and restores the original password. It does not run by default and cannot run against a remote deployment.
+Remote fixture execution requires `TEST_ALLOW_REMOTE=1`. Set it only for the intended deployment.
 
 Build and TypeScript checks remain separate:
 
@@ -31,4 +35,4 @@ npm run typecheck
 npm run build
 ```
 
-Browser verification should cover the complete creator/designer flow plus the admin employee form at 375 px, 768 px, and 1440 px. Check light and dark mode, keyboard focus, modal escape behavior, file-picker feedback, long task titles, empty states, and visible mutation errors. API integration tests alone do not prove the final interface has been visually verified.
+Browser verification should cover the sign-in page, both views and all dialogs at 375 px, 768 px and 1440 px, in light and dark themes: status circle cycling and its undo toast, the overdue filter, the employee sheet's "Vazifa belgilash" shortcut, keyboard focus and Escape. API tests do not establish visual completion.

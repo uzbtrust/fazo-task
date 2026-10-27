@@ -1,62 +1,35 @@
 "use client";
 
-import { useEffect, useRef, type ReactNode } from "react";
 import {
-  X,
-  LoaderCircle,
-  Paperclip,
-  FileText,
-  ArrowUpRight,
-} from "lucide-react";
-import type { Attachment, Priority, TaskStatus, Role } from "@/lib/types";
+  useEffect,
+  useId,
+  useLayoutEffect,
+  useRef,
+  useState,
+  type ReactNode,
+} from "react";
+import { LoaderCircle, X } from "lucide-react";
+import type { Priority, TaskStatus } from "@/lib/types";
 
-export const roleLabels: Record<Role, string> = {
-  admin: "Administrator",
-  creator: "Kontent kreator",
-  designer: "Dizayner",
-};
 export const statusLabels: Record<TaskStatus, string> = {
-  open: "Ochiq",
+  todo: "Yangi",
   in_progress: "Jarayonda",
-  in_review: "Tekshiruvda",
-  approved: "Tasdiqlangan",
-  completed: "Yakunlangan",
-  cancelled: "Bekor qilingan",
+  done: "Bajarildi",
 };
 export const priorityLabels: Record<Priority, string> = {
-  low: "Past",
-  medium: "O‘rta",
-  high: "Yuqori",
+  1: "Oddiy",
+  2: "Muhim",
+  3: "Shoshilinch",
 };
-export const categories = [
-  "Ijtimoiy tarmoq",
-  "Brending",
-  "Taqdimot",
-  "Veb dizayn",
-  "Bosma dizayn",
-  "Boshqa",
-];
-export const actionLabels: Record<string, string> = {
-  created: "vazifa yaratdi",
-  create: "vazifa yaratdi",
-  claimed: "vazifani oldi",
-  claim: "vazifani oldi",
-  released: "vazifani qaytardi",
-  release: "vazifani qaytardi",
-  submitted: "ishni topshirdi",
-  submit: "ishni topshirdi",
-  approved: "ishni tasdiqladi",
-  approve: "ishni tasdiqladi",
-  request_changes: "tuzatish so‘radi",
-  changes_requested: "tuzatish so‘radi",
-  complete: "ishni yakunladi",
-  completed: "ishni yakunladi",
-  cancel: "vazifani bekor qildi",
-  cancelled: "vazifani bekor qildi",
-  edit: "vazifani tahrirladi",
-  edited: "vazifani tahrirladi",
-  comment: "izoh qoldirdi",
-  commented: "izoh qoldirdi",
+export const nextStatus: Record<TaskStatus, TaskStatus> = {
+  todo: "in_progress",
+  in_progress: "done",
+  done: "todo",
+};
+export const nextStatusAction: Record<TaskStatus, string> = {
+  todo: "Jarayonga o‘tkazish",
+  in_progress: "Bajarildi deb belgilash",
+  done: "Qayta ochish",
 };
 
 export async function api<T>(
@@ -65,10 +38,7 @@ export async function api<T>(
 ): Promise<T> {
   const response = await fetch(url, {
     ...options,
-    headers:
-      options.body instanceof FormData
-        ? options.headers
-        : { "Content-Type": "application/json", ...options.headers },
+    headers: { "Content-Type": "application/json", ...options.headers },
   });
   const data = await response
     .json()
@@ -83,42 +53,31 @@ export async function api<T>(
     throw new Error(data.error || "Amal bajarilmadi. Qayta urinib ko‘ring.");
   return data as T;
 }
+
+/* ---- Sana: hammasi Toshkent vaqtida ---------------------------------- */
 const months = [
-  "yanvar",
-  "fevral",
-  "mart",
-  "aprel",
-  "may",
-  "iyun",
-  "iyul",
-  "avgust",
-  "sentabr",
-  "oktabr",
-  "noyabr",
-  "dekabr",
+  "yanvar", "fevral", "mart", "aprel", "may", "iyun",
+  "iyul", "avgust", "sentabr", "oktabr", "noyabr", "dekabr",
 ];
 const monthShort = [
-  "yan",
-  "fev",
-  "mar",
-  "apr",
-  "may",
-  "iyn",
-  "iyl",
-  "avg",
-  "sen",
-  "okt",
-  "noy",
-  "dek",
+  "yan", "fev", "mar", "apr", "may", "iyn",
+  "iyl", "avg", "sen", "okt", "noy", "dek",
 ];
+const weekdays: Record<string, string> = {
+  Monday: "Dushanba",
+  Tuesday: "Seshanba",
+  Wednesday: "Chorshanba",
+  Thursday: "Payshanba",
+  Friday: "Juma",
+  Saturday: "Shanba",
+  Sunday: "Yakshanba",
+};
 function dateParts(date: Date) {
   const parts = new Intl.DateTimeFormat("en-GB", {
     day: "2-digit",
     month: "2-digit",
     year: "numeric",
-    hour: "2-digit",
-    minute: "2-digit",
-    hourCycle: "h23",
+    weekday: "long",
     timeZone: "Asia/Tashkent",
   }).formatToParts(date);
   const get = (type: string) => parts.find((p) => p.type === type)?.value || "";
@@ -126,290 +85,291 @@ function dateParts(date: Date) {
     day: get("day"),
     month: get("month"),
     year: get("year"),
-    hour: get("hour"),
-    minute: get("minute"),
+    weekday: weekdays[get("weekday")] || "",
   };
 }
-export function shortDate(value: string | null, time = false) {
-  if (!value) return "Belgilanmagan";
-  const date = new Date(
-    value.length === 10 ? value + "T12:00:00+05:00" : value,
-  );
-  if (!Number.isFinite(date.getTime())) return "Belgilanmagan";
-  const p = dateParts(date);
-  return `${Number(p.day)}-${monthShort[Number(p.month) - 1]}${time ? `, ${p.hour}:${p.minute}` : ""}`;
-}
-export function fullDate(date = new Date()) {
-  const p = dateParts(date);
-  return `${Number(p.day)}-${months[Number(p.month) - 1]}, ${p.year}`;
+function parseDay(value: string) {
+  return new Date(value.length === 10 ? `${value}T12:00:00+05:00` : value);
 }
 export function todayISO() {
   const p = dateParts(new Date());
   return `${p.year}-${p.month}-${p.day}`;
 }
+export function addDaysISO(days: number) {
+  const [y, m, d] = todayISO().split("-").map(Number);
+  return new Date(Date.UTC(y, m - 1, d + days)).toISOString().slice(0, 10);
+}
+function dayDiff(iso: string) {
+  const [y, m, d] = iso.split("-").map(Number);
+  const [ty, tm, td] = todayISO().split("-").map(Number);
+  return Math.round((Date.UTC(y, m - 1, d) - Date.UTC(ty, tm - 1, td)) / 864e5);
+}
+export function shortDate(value: string | null) {
+  if (!value) return "Belgilanmagan";
+  const date = parseDay(value);
+  if (!Number.isFinite(date.getTime())) return "Belgilanmagan";
+  const p = dateParts(date);
+  return `${Number(p.day)}-${monthShort[Number(p.month) - 1]}`;
+}
+export function longDate(value: string) {
+  const p = dateParts(parseDay(value));
+  return `${Number(p.day)}-${months[Number(p.month) - 1]}, ${p.year}`;
+}
+export function todayEyebrow() {
+  const p = dateParts(new Date());
+  return { date: `${Number(p.day)}-${months[Number(p.month) - 1]}`, weekday: p.weekday };
+}
+export function isOverdue(dueDate: string | null, status: TaskStatus) {
+  return !!dueDate && status !== "done" && dueDate < todayISO();
+}
+export function dueLabel(dueDate: string, status: TaskStatus) {
+  const diff = dayDiff(dueDate);
+  if (status === "done") return { text: shortDate(dueDate), tone: "" };
+  if (diff < 0)
+    return { text: `${-diff} kun kechikdi`, tone: "bad" };
+  if (diff === 0) return { text: "Bugun", tone: "warn" };
+  if (diff === 1) return { text: "Ertaga", tone: "" };
+  return { text: shortDate(dueDate), tone: "" };
+}
+
+/* ---- Kichik komponentlar --------------------------------------------- */
+export function Wordmark() {
+  return (
+    <a href="/" className="wordmark" aria-label="Fazo Task — bosh sahifa">
+      <svg className="wordmark-mark" viewBox="0 0 24 24" width="22" height="22" aria-hidden="true">
+        <rect width="24" height="24" rx="6.5" />
+        <path d="m7.2 12.4 3.1 3.1 6.5-7" />
+      </svg>
+      <span className="wordmark-text">Fazo Task</span>
+    </a>
+  );
+}
+
 export function initials(name: string) {
   return name
-    .split(" ")
+    .split(/\s+/)
+    .filter(Boolean)
     .map((s) => s[0])
     .slice(0, 2)
     .join("")
     .toUpperCase();
 }
-export function Logo({ small = false }: { small?: boolean }) {
-  return (
-    <a
-      href="/"
-      className={`brand ${small ? "brand-small" : ""}`}
-      aria-label="Fazo Task bosh sahifa"
-    >
-      <svg
-        className="brand-mark"
-        viewBox="0 0 36 36"
-        fill="none"
-        aria-hidden="true"
-      >
-        <path
-          d="M8 26 19 6l9 20H8Z"
-          stroke="currentColor"
-          strokeWidth="2.4"
-          strokeLinejoin="round"
-        />
-        <ellipse
-          cx="18"
-          cy="21"
-          rx="16"
-          ry="5"
-          transform="rotate(-29 18 21)"
-          stroke="currentColor"
-          strokeWidth="2"
-        />
-        <path
-          d="m13 17 6-11 5 12"
-          stroke="currentColor"
-          strokeWidth="2.4"
-          strokeLinejoin="round"
-        />
-      </svg>
-      <span>
-        fazo<span className="brand-task">task</span>
-      </span>
-    </a>
-  );
-}
-export function Spinner() {
-  return <LoaderCircle size={18} className="spin" aria-label="Yuklanmoqda" />;
-}
-export function Badge({ status }: { status: TaskStatus }) {
-  return (
-    <span className={`badge status-${status}`}>
-      <span className="status-dot" />
-      {statusLabels[status]}
-    </span>
-  );
-}
-export function PriorityBadge({ priority }: { priority: Priority }) {
-  return (
-    <span className={`priority priority-${priority}`}>
-      <span>{priority === "high" ? "↑" : priority === "low" ? "↓" : "−"}</span>
-      {priorityLabels[priority]}
-    </span>
-  );
-}
+
 export function Avatar({
   name,
-  small = false,
+  size = "md",
 }: {
   name: string;
-  small?: boolean;
+  size?: "sm" | "md" | "lg";
 }) {
   return (
-    <span
-      className={`avatar ${small ? "avatar-small" : ""}`}
-      aria-hidden="true"
-    >
+    <span className={`avatar avatar-${size}`} aria-hidden="true">
       {initials(name)}
     </span>
   );
 }
-export function Modal({
-  title,
-  eyebrow,
-  children,
-  onClose,
-  wide = false,
-}: {
-  title: string;
-  eyebrow?: string;
-  children: ReactNode;
-  onClose: () => void;
-  wide?: boolean;
-}) {
-  const ref = useRef<HTMLDialogElement>(null);
-  useEffect(() => {
-    const dialog = ref.current;
-    const previous = document.activeElement as HTMLElement;
-    dialog?.showModal();
-    const old = document.body.style.overflow;
-    document.body.style.overflow = "hidden";
-    return () => {
-      document.body.style.overflow = old;
-      dialog?.close();
-      previous?.focus();
-    };
-  }, []);
-  return (
-    <dialog
-      ref={ref}
-      className={`modal ${wide ? "modal-wide" : ""}`}
-      onCancel={(e) => {
-        e.preventDefault();
-        onClose();
-      }}
-      onClick={(e) => {
-        if (e.target === ref.current) {
-          const r = ref.current.getBoundingClientRect();
-          if (
-            e.clientX < r.left ||
-            e.clientX > r.right ||
-            e.clientY < r.top ||
-            e.clientY > r.bottom
-          )
-            onClose();
-        }
-      }}
-      aria-labelledby="modal-title"
-    >
-      <div className="modal-heading">
-        <div>
-          {eyebrow && <p className="eyebrow">{eyebrow}</p>}
-          <h2 id="modal-title">{title}</h2>
-        </div>
-        <button className="icon-button" aria-label="Yopish" onClick={onClose}>
-          <X size={20} />
-        </button>
-      </div>
-      {children}
-    </dialog>
-  );
+
+export function Spinner({ label = "Yuklanmoqda" }: { label?: string }) {
+  return <LoaderCircle size={18} className="spin" aria-label={label} />;
 }
-export function FileLinks({ files }: { files: Attachment[] }) {
-  return files.length ? (
-    <div className="file-links">
-      {files.map((file) => (
-        <a
-          key={file.id}
-          className="file-link"
-          href={file.url}
-          target="_blank"
-          rel="noopener noreferrer"
-        >
-          <span className="file-icon">
-            <FileText size={19} />
-          </span>
-          <span>
-            <strong>{file.name}</strong>
-            <small>
-              {file.size < 1024 * 1024
-                ? Math.ceil(file.size / 1024) + " KB"
-                : (file.size / 1024 / 1024).toFixed(1) + " MB"}
-            </small>
-          </span>
-          <ArrowUpRight size={16} />
-        </a>
-      ))}
-    </div>
-  ) : null;
-}
-export function FilePicker({
-  files,
-  onChange,
-  busy,
-  onBusy,
-}: {
-  files: Attachment[];
-  onChange: (files: Attachment[]) => void;
-  busy: boolean;
-  onBusy: (busy: boolean) => void;
-}) {
-  const ref = useRef<HTMLInputElement>(null);
-  const errorRef = useRef<HTMLParagraphElement>(null);
-  async function upload(items: FileList | null) {
-    if (!items?.length) return;
-    onBusy(true);
-    if (errorRef.current) errorRef.current.textContent = "";
-    let added = [...files];
-    try {
-      for (const file of Array.from(items)) {
-        if (file.size > 3 * 1024 * 1024)
-          throw new Error("Har bir fayl hajmi 3 MB dan oshmasin.");
-        const data = new FormData();
-        data.append("file", file);
-        const result = await api<{ file: Attachment }>("/api/files", {
-          method: "POST",
-          body: data,
-        });
-        added = [...added, result.file];
-        onChange(added);
-      }
-    } catch (error) {
-      if (errorRef.current)
-        errorRef.current.textContent = (error as Error).message;
-    } finally {
-      onBusy(false);
-      if (ref.current) ref.current.value = "";
-    }
-  }
-  return (
-    <div>
-      <input
-        ref={ref}
-        type="file"
-        multiple
-        className="sr-only"
-        id="file-upload"
-        onChange={(e) => upload(e.target.files)}
-        accept=".png,.jpg,.jpeg,.webp,.gif,.pdf,.txt,.zip,.psd,.ai,.svg,.fig,.sketch,.eps,.docx,.pptx,.xlsx"
-      />
-      <button
-        type="button"
-        className="upload-zone"
-        disabled={busy}
-        onClick={() => ref.current?.click()}
-      >
-        <span className="upload-icon">
-          {busy ? <Spinner /> : <Paperclip size={20} />}
-        </span>
-        <span>
-          <strong>{busy ? "Fayl yuklanmoqda…" : "Fayl biriktirish"}</strong>
-          <small>Rasm, hujjat yoki dizayn fayli · 3 MB gacha</small>
-        </span>
-        <span className="upload-plus">+</span>
-      </button>
-      <p ref={errorRef} className="field-error" role="alert" />
-      {files.length > 0 && (
-        <div className="uploaded-files">
-          {files.map((file) => (
-            <span key={file.id}>
-              <Paperclip size={13} />
-              <span>{file.name}</span>
-              <button
-                type="button"
-                aria-label={`${file.name} faylini olib tashlash`}
-                onClick={() => onChange(files.filter((f) => f.id !== file.id))}
-              >
-                <X size={14} />
-              </button>
-            </span>
-          ))}
-        </div>
-      )}
-    </div>
-  );
-}
+
 export function ErrorMessage({ message }: { message: string }) {
   return message ? (
     <p role="alert" className="error-message">
       {message}
     </p>
   ) : null;
+}
+
+export function PriorityTag({ priority, quiet = false }: { priority: Priority; quiet?: boolean }) {
+  if (quiet && priority === 1) return null;
+  return (
+    <span className={`tag tag-priority-${priority}`}>
+      <span className="sr-only">Muhimlik: </span>
+      {priorityLabels[priority]}
+    </span>
+  );
+}
+
+/** Raqam o‘zgarganda silliq sanab chiqadi (kamaytirilgan harakatda darhol). */
+export function CountUp({ value, pad = 2 }: { value: number; pad?: number }) {
+  const [shown, setShown] = useState(value);
+  const from = useRef(0);
+  useEffect(() => {
+    const start = from.current;
+    from.current = value;
+    if (
+      start === value ||
+      window.matchMedia("(prefers-reduced-motion: reduce)").matches
+    ) {
+      setShown(value);
+      return;
+    }
+    let frame = 0;
+    const began = performance.now();
+    const tick = (now: number) => {
+      const t = Math.min(1, (now - began) / 700);
+      const eased = 1 - Math.pow(1 - t, 4);
+      setShown(Math.round(start + (value - start) * eased));
+      if (t < 1) frame = requestAnimationFrame(tick);
+    };
+    frame = requestAnimationFrame(tick);
+    return () => cancelAnimationFrame(frame);
+  }, [value]);
+  return <>{String(shown).padStart(pad, "0")}</>;
+}
+
+/** Sirpanuvchi indikatorli segmentli tanlov (Apple uslubida). */
+export function Segmented<T extends string>({
+  value,
+  options,
+  onChange,
+  label,
+  className = "",
+}: {
+  value: T;
+  options: { value: T; label: ReactNode; count?: number }[];
+  onChange: (value: T) => void;
+  label: string;
+  className?: string;
+}) {
+  const ref = useRef<HTMLDivElement>(null);
+  const [indicator, setIndicator] = useState<{ x: number; w: number } | null>(null);
+  const [animate, setAnimate] = useState(false);
+  // Hisoblar o‘zgarsa tugma kengligi ham o‘zgaradi — indikatorni qayta o‘lchaymiz.
+  const layoutKey = options.map((o) => `${o.value}:${o.count ?? ""}`).join("|");
+  useLayoutEffect(() => {
+    const root = ref.current;
+    if (!root) return;
+    const measure = () => {
+      const active = root.querySelector<HTMLElement>("[aria-pressed='true']");
+      // Yopiq dialog ichida kenglik 0 bo‘ladi — u holda CSS zaxira ko‘rinishi ishlaydi.
+      const next =
+        active && active.offsetWidth ? { x: active.offsetLeft, w: active.offsetWidth } : null;
+      setIndicator((prev) =>
+        prev && next && prev.x === next.x && prev.w === next.w ? prev : next,
+      );
+    };
+    measure();
+    const observer = new ResizeObserver(measure);
+    observer.observe(root);
+    return () => observer.disconnect();
+  }, [value, layoutKey]);
+  useEffect(() => {
+    if (!indicator || animate) return;
+    const frame = requestAnimationFrame(() => setAnimate(true));
+    return () => cancelAnimationFrame(frame);
+  }, [indicator, animate]);
+  return (
+    <div
+      ref={ref}
+      className={`segmented ${indicator ? "is-measured" : ""} ${animate ? "is-animated" : ""} ${className}`}
+      role="group"
+      aria-label={label}
+    >
+      {indicator && (
+        <span
+          className="segmented-ind"
+          style={{ transform: `translateX(${indicator.x}px)`, width: indicator.w }}
+          aria-hidden="true"
+        />
+      )}
+      {options.map((option) => (
+        <button
+          key={option.value}
+          type="button"
+          aria-pressed={option.value === value}
+          onClick={() => onChange(option.value)}
+        >
+          {option.label}
+          {option.count !== undefined && (
+            <span className="seg-count">{option.count}</span>
+          )}
+        </button>
+      ))}
+    </div>
+  );
+}
+
+export function Modal({
+  title,
+  eyebrow,
+  children,
+  onClose,
+  size = "md",
+  hideTitle = false,
+}: {
+  title: string;
+  eyebrow?: ReactNode;
+  children: ReactNode;
+  onClose: () => void;
+  size?: "sm" | "md" | "lg";
+  hideTitle?: boolean;
+}) {
+  const ref = useRef<HTMLDialogElement>(null);
+  const titleId = useId();
+  const closing = useRef(false);
+  useEffect(() => {
+    const dialog = ref.current;
+    const previous = document.activeElement as HTMLElement | null;
+    dialog?.showModal();
+    // showModal() fokusni birinchi tugmaga (Yopish) beradi; formada birinchi maydonga o‘tkazamiz.
+    dialog?.querySelector<HTMLElement>(".sheet-body input, .sheet-body textarea")?.focus();
+    return () => {
+      dialog?.close();
+      previous?.focus?.();
+    };
+  }, []);
+  // Yopilishda qisqa animatsiya, keyin ota komponent dialogni olib tashlaydi.
+  function requestClose() {
+    const dialog = ref.current;
+    if (!dialog || closing.current) return;
+    if (window.matchMedia("(prefers-reduced-motion: reduce)").matches) {
+      onClose();
+      return;
+    }
+    closing.current = true;
+    dialog.classList.add("is-closing");
+    setTimeout(onClose, 180);
+  }
+  return (
+    <dialog
+      ref={ref}
+      className={`sheet sheet-${size}`}
+      onCancel={(e) => {
+        e.preventDefault();
+        requestClose();
+      }}
+      onClick={(e) => {
+        if (e.target !== ref.current) return;
+        const r = ref.current.getBoundingClientRect();
+        if (
+          e.clientX < r.left ||
+          e.clientX > r.right ||
+          e.clientY < r.top ||
+          e.clientY > r.bottom
+        )
+          requestClose();
+      }}
+      aria-labelledby={titleId}
+    >
+      <div className={`sheet-head ${hideTitle ? "is-bare" : ""}`}>
+        <div>
+          {eyebrow && <p className="eyebrow">{eyebrow}</p>}
+          <h2 id={titleId} className={hideTitle ? "sr-only" : ""}>
+            {title}
+          </h2>
+        </div>
+        <button
+          type="button"
+          className="icon-button sheet-close"
+          aria-label="Yopish"
+          onClick={requestClose}
+        >
+          <X size={18} strokeWidth={2} />
+        </button>
+      </div>
+      {children}
+    </dialog>
+  );
 }
