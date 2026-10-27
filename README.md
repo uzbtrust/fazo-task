@@ -79,6 +79,8 @@ Batafsil: [docs/TESTING.md](docs/TESTING.md).
 
 Next.js App Router, React, TypeScript, Lucide ikonkalari, Turso/libSQL. Mahalliy rivojlantirishda SQLite (`fazo.db`), Vercel’da esa masofaviy Turso (`TURSO_DATABASE_URL`, `TURSO_AUTH_TOKEN`) ishlatiladi.
 
+Server funksiyalari Mumbayda (`bom1`, `vercel.json`) ishlaydi — Turso bazasi bilan bir mintaqada (`aws-ap-south-1`). Baza boshqa mintaqaga ko‘chirilsa, `regions` ham unga mos o‘zgartirilishi kerak: har bir baza so‘rovi server va baza orasidagi masofani bosib o‘tadi.
+
 **Jadvallar:**
 - `members` — hisoblar;
 - `member_sessions` — kirish sessiyalari;
