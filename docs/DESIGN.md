@@ -13,10 +13,25 @@ Asosiy manba: [uzbtrust/mankiw-chapters](https://github.com/uzbtrust/mankiw-chap
 
 ## Ekranlar
 
-- **Kirish:** mankiw-chapters bosh sahifasi kabi markazlashgan hero, ostida Apple ID uslubidagi birlashgan login/parol maydoni.
-- **Vazifalar:** sarlavha + raqamlar qatori (bob sarlavhasidagi "facts" kabi; bosilganda saralaydi), so‘ng holat bo‘yicha guruhlangan "inset" ro‘yxat. Doiracha: bo‘sh → yarim → belgi.
-- **Hodimlar:** bob kartalari uslubidagi kartalar — katta raqam (faol vazifalar), ism, lavozim, bajarilganlik chizig‘i.
-- **Dialoglar:** markazda varaq; telefonda pastdan chiqadigan varaq. Ochilishda masshtab + xiralik, yopilishda qisqa qaytish.
+- **Kirish:** mankiw-chapters bosh sahifasi kabi markazlashgan hero. Ostida «Kirish / Ro‘yxatdan o‘tish» segmenti va Apple ID uslubidagi birlashgan maydonlar.
+- **Har rolning o‘z paneli.** Yuqori paneldagi segment rolga qarab o‘zgaradi:
+  - administrator — Jamoa / Statistika;
+  - PM — Vazifalar / Dizaynerlar;
+  - dizayner — Mening vazifalarim / Ochiq vazifalar.
+- **Vazifalar ro‘yxati:** sarlavha, raqamlar qatori (bosilganda saralaydi) va holat bo‘yicha guruhlangan "inset" ro‘yxat.
+  - Holat belgisi: bo‘sh doira — ochiq, yarim — jarayonda, nuqta — tekshiruvda, belgi — bajarildi, ✕ — bekor qilingan (nomi chizilgan).
+- **Hodim kartalari:** bob kartalari uslubida. Katta raqam dizaynerda hozirgi ishlarni, PMda qo‘ygan vazifalarini ko‘rsatadi.
+- **Vazifa varag‘i:**
+  - bosqichlar chizig‘i (tekshiruv yoqilsa — to‘rt, hozir uch bosqich);
+  - ma’lumotlar ro‘yxati;
+  - TZ (matn va fayllar);
+  - natija galereyasi (lightbox bilan);
+  - tarix.
+- **Statistika:**
+  - umumiy ko‘rsatkichlar katta raqamlarda;
+  - dizaynerlar jadvalida rasmlar soni bitta rangli gorizontal ustun bilan;
+  - telefonda jadval kartalarga aylanadi.
+- **Dialoglar:** markazda varaq, telefonda pastdan chiqadi.
 
 ## Harakat
 

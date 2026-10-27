@@ -845,6 +845,9 @@ svg {
 .fact.is-bad .fact-num {
   color: var(--bad);
 }
+.fact.is-accent .fact-num {
+  color: var(--accent-ink);
+}
 .fact:disabled .fact-num {
   color: var(--fg-4);
 }
@@ -1086,53 +1089,38 @@ svg {
   white-space: nowrap;
 }
 
-/* Holat doirasi: bo‘sh → yarim → belgilangan */
-.check {
-  position: relative;
-  z-index: 1;
+/* Holat belgisi: bo‘sh → yarim → nuqta (tekshiruvda) → belgi */
+.row-glyph {
   display: grid;
   place-items: center;
   flex: none;
   width: 26px;
   height: 26px;
-  border-radius: 50%;
-  color: var(--fg-4);
-  transition:
-    color var(--t-fast) var(--ease),
-    transform var(--t-fast) var(--ease);
 }
-.check::before {
-  content: "";
-  position: absolute;
-  inset: -9px;
-}
-.check svg {
-  width: 26px;
-  height: 26px;
+.glyph {
+  width: 24px;
+  height: 24px;
   overflow: visible;
+  color: var(--fg-4);
 }
-.check-ring {
+.glyph-ring {
   fill: none;
   stroke: currentColor;
   stroke-width: 1.6;
 }
-.check-half,
-.check-fill {
+.glyph-half,
+.glyph-dot,
+.glyph-fill {
   fill: var(--accent);
   opacity: 0;
   transform-box: fill-box;
   transform-origin: center;
+  transform: scale(0.5);
   transition:
     opacity var(--t-fast) var(--ease),
     transform 0.45s var(--ease-spring);
 }
-.check-half {
-  transform: scale(0.6);
-}
-.check-fill {
-  transform: scale(0.3);
-}
-.check-mark {
+.glyph-mark {
   fill: none;
   stroke: #fff;
   stroke-width: 2.4;
@@ -1142,30 +1130,78 @@ svg {
   stroke-dashoffset: 16;
   transition: stroke-dashoffset 0.35s 0.08s var(--ease-out);
 }
-.check-in_progress {
+.glyph-in_progress,
+.glyph-in_review,
+.glyph-done {
   color: var(--accent);
 }
-.check-in_progress .check-half {
+.glyph-in_progress .glyph-half,
+.glyph-in_review .glyph-dot,
+.glyph-done .glyph-fill {
   opacity: 1;
   transform: none;
 }
-.check-done {
-  color: var(--accent);
+.glyph-in_review .glyph-ring {
+  stroke-dasharray: 3 3.3;
 }
-.check-done .check-fill {
-  opacity: 1;
-  transform: none;
-}
-.check-done .check-mark {
+.glyph-done .glyph-mark {
   stroke-dashoffset: 0;
 }
-.check:active {
-  transform: scale(0.86);
+.glyph-cross {
+  fill: none;
+  stroke: currentColor;
+  stroke-width: 1.8;
+  stroke-linecap: round;
+  opacity: 0;
 }
-@media (hover: hover) {
-  .check:hover {
-    color: var(--accent);
-  }
+.glyph-cancelled .glyph-cross {
+  opacity: 1;
+}
+.task-row.is-cancelled .row-title {
+  color: var(--fg-3);
+  text-decoration: line-through;
+  text-decoration-color: var(--fg-4);
+}
+.steps.is-cancelled li {
+  opacity: 0.45;
+}
+.task-row.is-in_review .row-title {
+  font-weight: 600;
+}
+.row-desc.is-returned {
+  color: var(--warn);
+}
+.count-chip {
+  display: inline-flex;
+  align-items: center;
+  gap: 5px;
+  padding: 2px 8px;
+  border-radius: var(--r-pill);
+  background: var(--chip);
+  color: var(--fg-2);
+  font-size: 12px;
+  font-weight: 600;
+  font-variant-numeric: tabular-nums;
+  white-space: nowrap;
+}
+.count-chip.is-full {
+  background: var(--accent-soft);
+  color: var(--accent-ink);
+}
+.stars {
+  display: inline-flex;
+  gap: 1px;
+  color: var(--fg-4);
+}
+.stars .on {
+  color: #f5a623;
+}
+.group-hint {
+  margin-left: 4px;
+  color: var(--fg-3);
+  font-size: 14px;
+  font-weight: 400;
+  letter-spacing: -0.01em;
 }
 
 /* ---- 60 · Hodimlar kartalari ----------------------------------------------- */
@@ -1750,6 +1786,10 @@ textarea.input {
   color: var(--fg-3);
   font-size: 13px;
 }
+.field-hint.tone-warn {
+  color: var(--warn);
+  font-weight: 500;
+}
 .error-message {
   padding: 10px 14px;
   border-radius: var(--r-sm);
@@ -1758,6 +1798,726 @@ textarea.input {
   font-size: 14px;
   font-weight: 500;
   line-height: 1.4;
+}
+
+/* ---- 75 · Rollar paneli uchun qo‘shimchalar ----------------------------------- */
+.role-pill {
+  padding: 4px 10px;
+  border-radius: var(--r-pill);
+  background: var(--fill);
+  color: var(--fg-2);
+  font-size: 12px;
+  font-weight: 600;
+  white-space: nowrap;
+}
+.page-loading {
+  display: grid;
+  place-items: center;
+  min-height: 50vh;
+  color: var(--fg-3);
+}
+.tag-accent {
+  background: var(--accent-soft);
+  color: var(--accent-ink);
+}
+.tag-warn {
+  background: var(--warn-soft);
+  color: var(--warn);
+}
+.icon-button.is-danger {
+  color: var(--bad);
+}
+
+/* Bo‘limlar: rollar bo‘yicha */
+.role-section {
+  margin-top: clamp(48px, 7vw, 80px);
+}
+.role-head {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: baseline;
+  justify-content: space-between;
+  gap: 4px 24px;
+  margin-bottom: 16px;
+}
+.role-head .group-head {
+  margin-bottom: 0;
+}
+.role-head p {
+  color: var(--fg-3);
+  font-size: 15px;
+}
+.people-grid.is-compact {
+  margin-top: 0;
+}
+.people-grid.is-compact .person-card {
+  min-height: 260px;
+}
+
+/* Yulduz tanlash */
+.star-picker {
+  display: flex;
+  align-items: center;
+  gap: 2px;
+}
+.star-picker button {
+  display: grid;
+  place-items: center;
+  width: 40px;
+  height: 40px;
+  border-radius: 10px;
+  color: var(--fg-4);
+  transition:
+    color var(--t-fast) var(--ease),
+    transform var(--t-fast) var(--ease-spring);
+}
+.star-picker button.on {
+  color: #f5a623;
+}
+.star-picker button:active {
+  transform: scale(0.85);
+}
+.star-picker-value {
+  margin-left: 10px;
+  color: var(--fg-3);
+  font-size: 14px;
+  font-variant-numeric: tabular-nums;
+}
+
+/* Son kiritish */
+.stepper {
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+  align-self: flex-start;
+  padding: 3px;
+  border-radius: var(--r-pill);
+  background: var(--fill);
+}
+.stepper button {
+  display: grid;
+  place-items: center;
+  width: 40px;
+  height: 40px;
+  border-radius: 50%;
+  background: var(--bg-elev);
+  color: var(--fg);
+  box-shadow: 0 1px 2px rgba(0, 0, 0, 0.08);
+  transition: transform var(--t-fast) var(--ease);
+}
+.stepper button:disabled {
+  opacity: 0.35;
+  box-shadow: none;
+}
+.stepper button:active:not(:disabled) {
+  transform: scale(0.9);
+}
+.stepper input {
+  width: 64px;
+  height: 40px;
+  border: 0;
+  background: transparent;
+  color: var(--fg);
+  font-size: 1.375rem;
+  font-weight: 600;
+  font-variant-numeric: tabular-nums;
+  text-align: center;
+  outline: none;
+  appearance: textfield;
+  -moz-appearance: textfield;
+}
+.stepper input::-webkit-outer-spin-button,
+.stepper input::-webkit-inner-spin-button {
+  -webkit-appearance: none;
+  margin: 0;
+}
+.stepper input::placeholder {
+  color: var(--fg-4);
+}
+.stepper:focus-within {
+  box-shadow: 0 0 0 3px var(--accent-soft);
+}
+.stepper-unit {
+  padding: 0 14px 0 4px;
+  color: var(--fg-3);
+  font-size: 15px;
+}
+
+/* Fayl yuklash zonasi */
+.drop {
+  border-radius: var(--r-md);
+  background: var(--fill);
+  box-shadow: inset 0 0 0 1.5px transparent;
+  transition:
+    background-color var(--t-fast) var(--ease),
+    box-shadow var(--t-fast) var(--ease);
+}
+.drop.is-over {
+  background: var(--accent-soft);
+  box-shadow: inset 0 0 0 1.5px var(--accent);
+}
+.drop-button {
+  display: flex;
+  align-items: center;
+  gap: 14px;
+  width: 100%;
+  min-height: 64px;
+  padding: 12px 16px;
+  border-radius: inherit;
+  text-align: left;
+}
+.drop-icon {
+  display: grid;
+  place-items: center;
+  flex: none;
+  width: 40px;
+  height: 40px;
+  border-radius: 50%;
+  background: var(--bg-elev);
+  color: var(--accent-ink);
+  box-shadow: 0 1px 2px rgba(0, 0, 0, 0.06);
+}
+.drop-text {
+  display: flex;
+  flex-direction: column;
+  min-width: 0;
+}
+.drop-text strong {
+  color: var(--accent-ink);
+  font-size: 15px;
+  font-weight: 600;
+}
+.drop-text small {
+  color: var(--fg-3);
+  font-size: 13px;
+}
+@media (hover: hover) {
+  .drop:hover {
+    background: var(--fill-hover);
+  }
+}
+
+/* Biriktirilgan fayllar */
+.attachments {
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+}
+.image-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(112px, 1fr));
+  gap: 8px;
+  padding: 0;
+  list-style: none;
+}
+.image-tile {
+  position: relative;
+  aspect-ratio: 1;
+  border-radius: 14px;
+  background: var(--sheet-card);
+  overflow: hidden;
+}
+.image-open {
+  display: block;
+  width: 100%;
+  height: 100%;
+}
+.image-open img {
+  width: 100%;
+  height: 100%;
+  object-fit: cover;
+  transition: transform 0.5s var(--ease-out);
+}
+@media (hover: hover) {
+  .image-open:hover img {
+    transform: scale(1.04);
+  }
+}
+.tile-remove {
+  position: absolute;
+  top: 6px;
+  right: 6px;
+  display: grid;
+  place-items: center;
+  width: 26px;
+  height: 26px;
+  border-radius: 50%;
+  background: rgba(0, 0, 0, 0.55);
+  color: #fff;
+  -webkit-backdrop-filter: blur(8px);
+  backdrop-filter: blur(8px);
+}
+.doc-list {
+  padding: 0;
+  list-style: none;
+  border-radius: var(--r-md);
+  background: var(--sheet-card);
+  overflow: hidden;
+}
+.doc-row {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  min-height: 56px;
+  padding: 8px 10px 8px 14px;
+}
+.doc-row + .doc-row {
+  border-top: 1px solid var(--line-soft);
+}
+.doc-icon {
+  display: grid;
+  place-items: center;
+  flex: none;
+  width: 36px;
+  height: 36px;
+  border-radius: 10px;
+  background: var(--accent-soft);
+  color: var(--accent-ink);
+}
+.doc-meta {
+  display: flex;
+  flex: 1;
+  flex-direction: column;
+  min-width: 0;
+}
+.doc-meta strong {
+  overflow: hidden;
+  font-size: 15px;
+  font-weight: 500;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+.doc-meta small {
+  color: var(--fg-3);
+  font-size: 12px;
+}
+
+/* Rasmni kattalashtirib ko‘rish */
+.lightbox {
+  width: 100vw;
+  max-width: none;
+  height: 100dvh;
+  max-height: none;
+  margin: 0;
+  padding: 0;
+  border: 0;
+  background: transparent;
+  color: #fff;
+}
+.lightbox[open] {
+  display: grid;
+  place-items: center;
+  animation: fade-in 0.25s var(--ease) both;
+}
+.lightbox::backdrop {
+  background: rgba(0, 0, 0, 0.88);
+  -webkit-backdrop-filter: blur(12px);
+  backdrop-filter: blur(12px);
+}
+.lightbox-bar {
+  position: fixed;
+  top: 0;
+  right: 0;
+  left: 0;
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  padding: 14px 16px 14px 24px;
+  font-size: 14px;
+}
+.lightbox-bar span {
+  flex: 1;
+  overflow: hidden;
+  color: rgba(255, 255, 255, 0.75);
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+.lightbox .icon-button {
+  color: #fff;
+}
+.lightbox .icon-button:hover {
+  background: rgba(255, 255, 255, 0.14);
+}
+.lightbox-image {
+  max-width: min(92vw, 1400px);
+  max-height: calc(100dvh - 140px);
+  border-radius: 12px;
+  object-fit: contain;
+  box-shadow: 0 30px 80px rgba(0, 0, 0, 0.5);
+  animation: sheet-in 0.4s var(--ease-out) both;
+}
+.lightbox-nav {
+  position: fixed;
+  top: 50%;
+  display: grid;
+  place-items: center;
+  width: 48px;
+  height: 48px;
+  border-radius: 50%;
+  background: rgba(255, 255, 255, 0.14);
+  color: #fff;
+  transform: translateY(-50%);
+  -webkit-backdrop-filter: blur(10px);
+  backdrop-filter: blur(10px);
+}
+.lightbox-nav.is-prev {
+  left: 16px;
+}
+.lightbox-nav.is-next {
+  right: 16px;
+}
+
+/* Vazifa varag‘i */
+.steps {
+  display: grid;
+  grid-template-columns: repeat(4, 1fr);
+  gap: 6px;
+  padding: 0;
+  list-style: none;
+}
+.steps li {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+  padding-top: 10px;
+  border-top: 3px solid var(--chip);
+  color: var(--fg-3);
+  font-size: 13px;
+  transition:
+    border-color var(--t) var(--ease),
+    color var(--t) var(--ease);
+}
+.steps li.is-done,
+.steps li.is-current {
+  border-color: var(--accent);
+}
+.steps li.is-current {
+  color: var(--fg);
+  font-weight: 600;
+}
+.step-dot {
+  display: grid;
+  place-items: center;
+  width: 20px;
+  height: 20px;
+  border-radius: 50%;
+  background: var(--chip);
+  color: var(--fg-3);
+  font-size: 11px;
+  font-weight: 700;
+}
+.steps li.is-done .step-dot,
+.steps li.is-current .step-dot {
+  background: var(--accent);
+  color: #fff;
+}
+.notice {
+  display: flex;
+  align-items: flex-start;
+  gap: 10px;
+  padding: 12px 14px;
+  border-radius: var(--r-sm);
+  background: var(--accent-soft);
+  color: var(--fg);
+  font-size: 15px;
+  line-height: 1.45;
+}
+.notice > svg {
+  margin-top: 2px;
+  color: var(--accent-ink);
+}
+.notice.is-warn {
+  background: var(--warn-soft);
+}
+.notice.is-warn > svg {
+  color: var(--warn);
+}
+.sheet-section {
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+}
+.sheet-section-title {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  color: var(--fg-2);
+  font-size: 13px;
+  font-weight: 700;
+  letter-spacing: 0.04em;
+  text-transform: uppercase;
+}
+.sheet-quote {
+  padding: 12px 14px;
+  border-left: 3px solid var(--accent);
+  border-radius: 0 var(--r-sm) var(--r-sm) 0;
+  background: var(--sheet-card);
+  font-size: 15px;
+  white-space: pre-wrap;
+  overflow-wrap: anywhere;
+}
+.sheet-quote span {
+  display: block;
+  margin-bottom: 4px;
+  color: var(--fg-3);
+  font-size: 12px;
+  font-weight: 600;
+}
+.composer {
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+  padding: 16px;
+  border-radius: var(--r-md);
+  background: var(--sheet-card);
+  animation: sheet-in 0.35s var(--ease-out) both;
+}
+.composer .input {
+  background: var(--bg-elev);
+}
+.composer-actions {
+  display: flex;
+  justify-content: flex-end;
+  gap: 8px;
+}
+.timeline {
+  display: flex;
+  flex-direction: column;
+  padding: 0;
+  list-style: none;
+}
+.timeline li {
+  position: relative;
+  padding: 0 0 14px 22px;
+  font-size: 14px;
+}
+.timeline li::before {
+  content: "";
+  position: absolute;
+  top: 14px;
+  bottom: 0;
+  left: 4px;
+  width: 1px;
+  background: var(--line);
+}
+.timeline li:last-child::before {
+  display: none;
+}
+.timeline-dot {
+  position: absolute;
+  top: 6px;
+  left: 0;
+  width: 9px;
+  height: 9px;
+  border-radius: 50%;
+  background: var(--accent);
+}
+.timeline li:not(:first-child) .timeline-dot {
+  background: var(--fg-4);
+}
+.timeline time {
+  margin-left: 8px;
+  color: var(--fg-3);
+  font-size: 12px;
+  font-variant-numeric: tabular-nums;
+}
+.timeline-message {
+  margin-top: 2px;
+  color: var(--fg-2);
+  white-space: pre-wrap;
+  overflow-wrap: anywhere;
+}
+.sheet-foot-note {
+  color: var(--fg-3);
+  font-size: 14px;
+}
+
+/* Admin: login ko‘rsatmasi */
+.instructions {
+  display: flex;
+  flex-direction: column;
+  gap: 14px;
+  padding: 16px;
+  border-radius: var(--r-md);
+  background: var(--sheet-card);
+}
+.login-chip {
+  display: flex;
+  align-items: baseline;
+  justify-content: space-between;
+  gap: 12px;
+}
+.login-chip span {
+  color: var(--fg-3);
+  font-size: 13px;
+}
+.login-chip strong {
+  font-family: ui-monospace, "SF Mono", SFMono-Regular, Menlo, monospace;
+  font-size: 1.25rem;
+  font-weight: 600;
+  overflow-wrap: anywhere;
+}
+.instructions ol {
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+  margin: 0;
+  padding-left: 20px;
+  color: var(--fg-2);
+  font-size: 14px;
+}
+.copy-button {
+  align-self: flex-start;
+  min-height: 38px;
+  padding: 0 16px;
+  font-size: 14px;
+}
+
+/* ---- 78 · Statistika ------------------------------------------------------------ */
+.stats-section {
+  margin-top: clamp(48px, 7vw, 80px);
+}
+.stats-table {
+  border-radius: var(--r-lg);
+  background: var(--card);
+  overflow: hidden;
+}
+.stats-head,
+.stats-row {
+  display: grid;
+  grid-template-columns:
+    minmax(170px, 1.3fr) minmax(150px, 1.5fr) 64px 92px 86px 112px
+    minmax(120px, 1fr);
+  align-items: center;
+  gap: 16px;
+  padding: 0 20px;
+}
+.no-returns .stats-head,
+.no-returns .stats-row {
+  grid-template-columns:
+    minmax(170px, 1.3fr) minmax(150px, 1.5fr) 64px 92px 112px
+    minmax(120px, 1fr);
+}
+.stats-head.is-pm,
+.stats-row.is-pm {
+  grid-template-columns: minmax(200px, 2fr) 1fr 1fr;
+}
+.stats-head {
+  min-height: 44px;
+  border-bottom: 1px solid var(--line-soft);
+  color: var(--fg-3);
+  font-size: var(--fs-xs);
+  font-weight: 600;
+  letter-spacing: 0.04em;
+  text-transform: uppercase;
+}
+.stats-row {
+  min-height: 64px;
+}
+.stats-row + .stats-row {
+  border-top: 1px solid var(--line-soft);
+}
+.stats-person {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  min-width: 0;
+}
+.stats-person strong {
+  overflow: hidden;
+  font-size: 15px;
+  font-weight: 600;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+.stats-bar-cell {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+}
+/* Bitta qator — bitta o‘lchov: bir rang, boshi o‘qqa yopishgan, uchi 4px yumaloq. */
+.stats-bar {
+  flex: 1;
+  height: 10px;
+  border-radius: 0 4px 4px 0;
+  background: var(--chip);
+  overflow: hidden;
+}
+.stats-bar > span {
+  display: block;
+  height: 100%;
+  border-radius: 0 4px 4px 0;
+  background: var(--accent);
+  transition: width 0.8s var(--ease-out);
+}
+.stats-num {
+  font-size: 16px;
+  font-weight: 600;
+  font-variant-numeric: tabular-nums;
+}
+.stats-num.is-low {
+  color: var(--warn);
+}
+.stats-ontime {
+  display: flex;
+  align-items: baseline;
+  gap: 6px;
+}
+.stats-ontime small {
+  color: var(--fg-3);
+  font-size: 12px;
+  font-variant-numeric: tabular-nums;
+}
+.stats-text {
+  color: var(--fg-2);
+  font-size: 14px;
+}
+.stats-muted {
+  color: var(--fg-4);
+}
+.stats-note {
+  max-width: 60em;
+  margin-top: 24px;
+  color: var(--fg-3);
+  font-size: 13px;
+  line-height: 1.5;
+}
+.tone-muted {
+  color: var(--fg-3);
+  font-weight: 400;
+}
+@media (max-width: 860px) {
+  .stats-head {
+    display: none;
+  }
+  .stats-row,
+  .no-returns .stats-row,
+  .stats-row.is-pm {
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+    gap: 12px 16px;
+    padding: 16px 18px;
+  }
+  .stats-person,
+  .stats-bar-cell {
+    grid-column: 1 / -1;
+  }
+  .stats-bar-cell {
+    flex-wrap: wrap;
+  }
+  .stats-row [data-label]::before {
+    content: attr(data-label);
+    display: block;
+    width: 100%;
+    margin-bottom: 2px;
+    color: var(--fg-3);
+    font-size: 11px;
+    font-weight: 600;
+    letter-spacing: 0.04em;
+    text-transform: uppercase;
+  }
+  .stats-ontime {
+    flex-wrap: wrap;
+  }
 }
 
 /* ---- Bildirishnoma --------------------------------------------------------- */
@@ -1911,29 +2671,45 @@ textarea.input {
 .password-row .icon-button {
   margin-right: 10px;
 }
+.login-form {
+  display: flex;
+  flex-direction: column;
+  gap: 14px;
+}
 .login-help {
-  margin-top: 6px;
-  text-align: center;
-}
-.login-help summary {
-  display: inline-flex;
-  min-height: 44px;
-  align-items: center;
-  color: var(--accent-ink);
-  font-size: var(--fs-sm);
-  cursor: pointer;
-  list-style: none;
-}
-.login-help summary::-webkit-details-marker {
-  display: none;
-}
-.login-help p {
   color: var(--fg-3);
   font-size: var(--fs-sm);
   line-height: 1.5;
+  text-align: center;
 }
-.login-help strong {
-  color: var(--fg);
+.link-inline {
+  color: var(--accent-ink);
+  font-weight: 500;
+}
+.link-inline:hover {
+  text-decoration: underline;
+}
+.register-hello {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  padding: 10px 14px 10px 8px;
+  border-radius: 14px;
+  background: var(--bg-alt);
+}
+.register-hello p {
+  display: flex;
+  flex-direction: column;
+  min-width: 0;
+}
+.register-hello strong {
+  font-size: 17px;
+  font-weight: 600;
+  letter-spacing: -0.02em;
+}
+.register-hello span {
+  color: var(--fg-3);
+  font-size: 14px;
 }
 
 /* ---- Umumiy ---------------------------------------------------------------- */
@@ -2003,8 +2779,8 @@ textarea.input {
     align-items: flex-start;
     padding-inline: 16px 14px;
   }
-  .task-row .check {
-    margin-top: 16px;
+  .task-row .row-glyph {
+    margin-top: 15px;
   }
   .task-row + .task-row::before {
     left: 56px;
@@ -2077,6 +2853,15 @@ textarea.input {
   }
 }
 @media (max-width: 520px) {
+  .role-pill {
+    display: none;
+  }
+  .steps li {
+    font-size: 11px;
+  }
+  .image-grid {
+    grid-template-columns: repeat(3, 1fr);
+  }
   .facts {
     display: grid;
     grid-template-columns: repeat(2, 1fr);

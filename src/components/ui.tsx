@@ -8,29 +8,21 @@ import {
   useState,
   type ReactNode,
 } from "react";
-import { LoaderCircle, X } from "lucide-react";
+import { LoaderCircle, Star, X } from "lucide-react";
 import type { Priority, TaskStatus } from "@/lib/types";
+import { REVIEW_STEP } from "@/lib/workflow";
 
 export const statusLabels: Record<TaskStatus, string> = {
-  todo: "Yangi",
+  todo: "Ochiq",
   in_progress: "Jarayonda",
+  in_review: "Tekshiruvda",
   done: "Bajarildi",
+  cancelled: "Bekor qilingan",
 };
-export const priorityLabels: Record<Priority, string> = {
-  1: "Oddiy",
-  2: "Muhim",
-  3: "Shoshilinch",
-};
-export const nextStatus: Record<TaskStatus, TaskStatus> = {
-  todo: "in_progress",
-  in_progress: "done",
-  done: "todo",
-};
-export const nextStatusAction: Record<TaskStatus, string> = {
-  todo: "Jarayonga o‘tkazish",
-  in_progress: "Bajarildi deb belgilash",
-  done: "Qayta ochish",
-};
+/** Vazifa bosqichlari (bekor qilish bosqich emas). Tekshiruv faqat yoqilganda. */
+export const STATUS_ORDER: TaskStatus[] = REVIEW_STEP
+  ? ["todo", "in_progress", "in_review", "done"]
+  : ["todo", "in_progress", "done"];
 
 export async function api<T>(
   url: string,
@@ -38,14 +30,17 @@ export async function api<T>(
 ): Promise<T> {
   const response = await fetch(url, {
     ...options,
-    headers: { "Content-Type": "application/json", ...options.headers },
+    headers:
+      options.body instanceof FormData
+        ? options.headers
+        : { "Content-Type": "application/json", ...options.headers },
   });
   const data = await response
     .json()
     .catch(() => ({ error: "Server bilan bog‘lanib bo‘lmadi." }));
   if (
     response.status === 401 &&
-    url !== "/api/auth/login" &&
+    !url.startsWith("/api/auth/") &&
     typeof window !== "undefined"
   )
     window.location.replace("/login");
@@ -115,16 +110,28 @@ export function longDate(value: string) {
   const p = dateParts(parseDay(value));
   return `${Number(p.day)}-${months[Number(p.month) - 1]}, ${p.year}`;
 }
+export function dateTime(value: string) {
+  const time = new Intl.DateTimeFormat("en-GB", {
+    hour: "2-digit",
+    minute: "2-digit",
+    hourCycle: "h23",
+    timeZone: "Asia/Tashkent",
+  }).format(new Date(value));
+  return `${shortDate(value)}, ${time}`;
+}
+export function fileSize(bytes: number) {
+  return bytes < 1024 * 1024 ? `${Math.max(1, Math.round(bytes / 1024))} KB` : `${(bytes / 1024 / 1024).toFixed(1)} MB`;
+}
 export function todayEyebrow() {
   const p = dateParts(new Date());
   return { date: `${Number(p.day)}-${months[Number(p.month) - 1]}`, weekday: p.weekday };
 }
 export function isOverdue(dueDate: string | null, status: TaskStatus) {
-  return !!dueDate && status !== "done" && dueDate < todayISO();
+  return !!dueDate && status !== "done" && status !== "cancelled" && dueDate < todayISO();
 }
 export function dueLabel(dueDate: string, status: TaskStatus) {
   const diff = dayDiff(dueDate);
-  if (status === "done") return { text: shortDate(dueDate), tone: "" };
+  if (status === "done" || status === "cancelled") return { text: shortDate(dueDate), tone: "" };
   if (diff < 0)
     return { text: `${-diff} kun kechikdi`, tone: "bad" };
   if (diff === 0) return { text: "Bugun", tone: "warn" };
@@ -155,6 +162,12 @@ export function initials(name: string) {
     .toUpperCase();
 }
 
+/** Ism tartibi har xil bo‘lishi mumkin (avval familiya yoki avval ism) — familiyani chetlab o‘tamiz. */
+export function givenName(name: string) {
+  const words = name.split(/\s+/).filter(Boolean);
+  return words.find((w) => !/(ov|ova|ev|eva|yev|yeva)$/i.test(w)) || words[0] || name;
+}
+
 export function Avatar({
   name,
   size = "md",
@@ -181,13 +194,111 @@ export function ErrorMessage({ message }: { message: string }) {
   ) : null;
 }
 
-export function PriorityTag({ priority, quiet = false }: { priority: Priority; quiet?: boolean }) {
-  if (quiet && priority === 1) return null;
+export function StatusGlyph({ status }: { status: TaskStatus }) {
   return (
-    <span className={`tag tag-priority-${priority}`}>
-      <span className="sr-only">Muhimlik: </span>
-      {priorityLabels[priority]}
+    <svg className={`glyph glyph-${status}`} viewBox="0 0 24 24" aria-hidden="true">
+      <circle className="glyph-ring" cx="12" cy="12" r="10" />
+      <path className="glyph-half" d="M12 5.5a6.5 6.5 0 0 0 0 13Z" />
+      <circle className="glyph-dot" cx="12" cy="12" r="4" />
+      <circle className="glyph-fill" cx="12" cy="12" r="10" />
+      <path className="glyph-mark" d="m7.6 12.3 3 3 5.8-6.3" />
+      <path className="glyph-cross" d="m8.5 8.5 7 7m0-7-7 7" />
+    </svg>
+  );
+}
+
+export function StatusTag({ status }: { status: TaskStatus }) {
+  return <span className={`tag tag-status-${status}`}>{statusLabels[status]}</span>;
+}
+
+export function Stars({ value }: { value: Priority | null }) {
+  if (!value) return null;
+  return (
+    <span className="stars" role="img" aria-label={`Muhimlik: ${value} yulduz`}>
+      {[1, 2, 3, 4, 5].map((n) => (
+        <Star key={n} size={12} strokeWidth={1.8} fill={n <= value ? "currentColor" : "none"} className={n <= value ? "on" : ""} />
+      ))}
     </span>
+  );
+}
+
+/** 1–5 yulduz; tanlangan yulduzni qayta bosish muhimlikni olib tashlaydi. */
+export function StarPicker({
+  value,
+  onChange,
+}: {
+  value: Priority | null;
+  onChange: (value: Priority | null) => void;
+}) {
+  const [hover, setHover] = useState<number>(0);
+  const shown = hover || value || 0;
+  return (
+    <div className="star-picker" role="group" aria-label="Muhimlik" onMouseLeave={() => setHover(0)}>
+      {([1, 2, 3, 4, 5] as Priority[]).map((n) => (
+        <button
+          key={n}
+          type="button"
+          aria-pressed={value === n}
+          aria-label={`${n} yulduz`}
+          className={n <= shown ? "on" : ""}
+          onMouseEnter={() => setHover(n)}
+          onClick={() => onChange(value === n ? null : n)}
+        >
+          <Star size={24} strokeWidth={1.6} fill={n <= shown ? "currentColor" : "none"} />
+        </button>
+      ))}
+      <span className="star-picker-value">{value ? `${value} / 5` : "Belgilanmagan"}</span>
+    </div>
+  );
+}
+
+export function ConfirmDialog({
+  title,
+  message,
+  confirmLabel,
+  danger = true,
+  onConfirm,
+  onClose,
+}: {
+  title: string;
+  message: ReactNode;
+  confirmLabel: string;
+  danger?: boolean;
+  onConfirm: () => Promise<void>;
+  onClose: () => void;
+}) {
+  const [busy, setBusy] = useState(false);
+  const [error, setError] = useState("");
+  async function run() {
+    setBusy(true);
+    setError("");
+    try {
+      await onConfirm();
+    } catch (e) {
+      setError((e as Error).message);
+      setBusy(false);
+    }
+  }
+  return (
+    <Modal title={title} onClose={onClose} size="sm">
+      <div className="sheet-body">
+        <p className="sheet-text">{message}</p>
+        <ErrorMessage message={error} />
+      </div>
+      <div className="sheet-foot">
+        <button type="button" className="btn btn-quiet" onClick={onClose} disabled={busy}>
+          Bekor qilish
+        </button>
+        <button
+          type="button"
+          className={`btn ${danger ? "btn-danger" : "btn-primary"}`}
+          onClick={() => void run()}
+          disabled={busy}
+        >
+          {busy ? <Spinner /> : confirmLabel}
+        </button>
+      </div>
+    </Modal>
   );
 }
 
@@ -337,6 +448,8 @@ export function Modal({
       ref={ref}
       className={`sheet sheet-${size}`}
       onCancel={(e) => {
+        // React bu hodisani ichki dialogdan (masalan, lightbox) ota dialogga ham uzatadi.
+        if (e.target !== ref.current) return;
         e.preventDefault();
         requestClose();
       }}
