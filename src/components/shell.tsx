@@ -73,6 +73,18 @@ export function usePolling(refresh: () => Promise<void>) {
   }, [refresh, notify]);
 }
 
+/** Navigatsiya yorlig‘i: keng ekranda to‘liq, telefonda qisqa. */
+export function NavLabel({ long, short }: { long: string; short: ReactNode }) {
+  return (
+    <>
+      <span className="nav-long">{long}</span>
+      <span className="nav-short" aria-hidden="true">
+        {short}
+      </span>
+    </>
+  );
+}
+
 export function Shell<V extends string>({
   account,
   nav,
@@ -81,7 +93,7 @@ export function Shell<V extends string>({
   children,
 }: {
   account: Account;
-  nav?: { value: V; label: string; count?: number }[];
+  nav?: { value: V; label: ReactNode; count?: number }[];
   view?: V;
   onView?: (view: V) => void;
   children: ReactNode;

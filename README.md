@@ -22,7 +22,7 @@ Login berilgandan to hodim ro‘yxatdan o‘tguncha o‘sha loginni bilgan istal
 
 **Ochiq → Jarayonda → Bajarildi** (PM xohlasa istalgan bosqichda **Bekor qilingan**)
 
-- PM vazifani qo‘yadi. Majburiy maydonlar: **nom**, **TZ** (matn yoki fayl, kamida bittasi) va **nechta rasm kerakligi**. Ixtiyoriy: **muddat** va **1–5 yulduz muhimlik**. Vazifa hech kimga biriktirilmaydi.
+- PM vazifani qo‘yadi. Majburiy maydonlar: **nom**, **TZ** (matn yoki fayl, kamida bittasi) va **nechta rasm kerakligi**. Ixtiyoriy: **referenslar** (namuna rasmlar moodboard ko‘rinishida va Pinterest/Behance/Dribbble kabi havolalar), **muddat** (kalendardan tanlanadi) va **1–5 yulduz muhimlik**. Vazifa hech kimga biriktirilmaydi.
 - Vazifa **«Ochiq vazifalar»**da turadi. Dizaynerlar TZ ni ochib ko‘radi va **«Men olaman»**ni bosadi. Ikki dizayner bir vaqtda bossa, faqat bittasi oladi.
 - Dizayner ishni PMga **og‘zaki** ko‘rsatadi. Kelishilgach, o‘zi **«Tugatdim»** deb belgilaydi, xohlasa izoh yoki havola qoldiradi. Rasm yuklash hozircha ixtiyoriy.
 - Dizayner vazifani **bo‘shatishi** mumkin, PM esa uni **ochiq ro‘yxatga qaytarishi** mumkin. Bunda yuklangan rasmlar o‘chadi.
@@ -36,15 +36,19 @@ Login berilgandan to hodim ro‘yxatdan o‘tguncha o‘sha loginni bilgan istal
 - **Bir zumda ochiladi.** Sahifa serverda tayyorlanadi: vazifalar ro‘yxati va TZ matnlari birinchi HTML bilan keladi, brauzer qo‘shimcha so‘rov kutmaydi. Bazaga sovuq ulanish va har bir ro‘yxat bitta tarmoq so‘rovida o‘qiladi.
 - **Og‘ir narsalar fonda.** TZ fayllari va rasmlar sahifa ko‘ringandan keyin, brauzer bo‘sh paytida birma-bir yuklanadi (eng ko‘pi 40 ta) va keshga tushadi. Kursor vazifa ustiga kelishi bilan uning fayllari darhol yuklana boshlaydi. Admin statistikasi ham fonda tayyorlanadi.
 
-## Statistika (admin)
+## Statistika
 
-Har bir dizayner bo‘yicha:
-- bajarilgan vazifalar va ulardagi rasmlar soni;
-- muddatli ishlardan qanchasi **vaqtida** tugatilgani (muddat kuni oxirigacha, Toshkent vaqti);
-- olishdan tugatishgacha o‘rtacha vaqt (tekshiruv yoqilganda — necha marta qaytarilgani ham);
-- hozir qo‘lidagi ishlar.
+Har bir rolda «Statistika» bo‘limi bor; davr — 7 kun, 30 kun yoki hammasi (grafikda so‘nggi 90 kun):
 
-PM bo‘yicha qo‘ygan va bajarilgan vazifalar ko‘rsatiladi. Bekor qilingan vazifalar statistikaga kirmaydi. Davrni 7 kun, 30 kun yoki butun davr qilib tanlash mumkin. Yangi hodim qo‘shilsa, u jadvalda avtomatik paydo bo‘ladi.
+- **Dizayner** — o‘z natijalari: tayyorlagan dizaynlari, bajargan vazifalari, muddatga rioya va kunlik dizaynlar grafigi.
+- **Project manager** — o‘zi bergan TZ lar soni, ular bo‘yicha tayyor dizaynlar, kunlik grafik va kim qancha qilgani.
+- **Administrator** — butun jamoa: kunlik grafik, har bir dizayner bo‘yicha jadval (dizaynlar, vazifalar, vaqtida %, o‘rtacha vaqt, hozirgi ishi; qatorni bosganda — uning kunlik grafigi) va PMlar jadvali.
+
+Yangi hodim qo‘shilsa, u jadvallarda avtomatik paydo bo‘ladi. Bekor qilingan vazifalar statistikaga kirmaydi.
+
+## Salomlashish jumlalari
+
+Har panelda «Salom, …» sarlavhasi ostida jumla klaviaturada yozilayotgandek chiqadi: inson kabi to‘xtab-to‘xtab yoziladi, 5–6 soniya turadi, o‘chiriladi va yangisi yoziladi. Har rolga 100 tadan jumla (`src/components/quotes.ts`) bor, ular holatga qarab tanlanadi: dizaynerning qo‘li bo‘shmi yoki ish ko‘pmi, bugun ko‘p dizayn tayyor bo‘ldimi, muddati o‘tgan ish bormi. Harakat kamaytirilgan rejimda jumlalar animatsiyasiz almashadi.
 
 ## Yangi kasb qo‘shish
 

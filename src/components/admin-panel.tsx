@@ -1,12 +1,13 @@
 "use client";
 import { FormEvent, useCallback, useEffect, useId, useState } from "react";
-import { Check, Copy, KeyRound, Pencil, Plus, Trash2, Users } from "lucide-react";
+import { BarChart3, Check, Copy, KeyRound, Pencil, Plus, Trash2, Users } from "lucide-react";
 import type { Account, Member } from "@/lib/types";
 import type { Initial } from "@/lib/initial";
 import { memberRoles, roleInfo, type MemberRole } from "@/lib/roles";
 import {
   api,
   Avatar,
+  givenName,
   ConfirmDialog,
   ErrorMessage,
   longDate,
@@ -15,7 +16,9 @@ import {
   Spinner,
 } from "./ui";
 import { Empty, Facts, PageHead, rise } from "./page-parts";
-import { Shell, usePolling, useToast } from "./shell";
+import { NavLabel, Shell, usePolling, useToast } from "./shell";
+import { TypedLine } from "./typed-line";
+import { firstQuote, pickQuote } from "./quotes";
 import { DesignerFacts, MemberCard } from "./pm-panel";
 import { prefetchStats, StatsView } from "./stats-view";
 
@@ -27,19 +30,31 @@ export function AdminPanel({ account, initial }: { account: Account; initial: In
   const [form, setForm] = useState<{ member?: Member; role?: MemberRole } | null>(null);
   const [openId, setOpenId] = useState<string | null>(null);
   const [view, setView] = useState<View>("team");
+  const [imagesToday, setImagesToday] = useState(0);
   const refresh = useCallback(async () => {
     setMembers((await api<{ members: Member[] }>("/api/members")).members);
   }, []);
   useEffect(() => {
     if (window.location.hash === "#statistika") setView("stats");
-    // Statistika fonda tayyorlanadi — bo‘limga o‘tilganda darhol ko‘rinadi.
-    const timer = setTimeout(() => void prefetchStats("30"), 800);
+    // Statistika fonda tayyorlanadi — bo‘limga o‘tilganda darhol ko‘rinadi;
+    // bugungi dizaynlar soni jumla tanlashga ham kerak.
+    const timer = setTimeout(
+      () =>
+        void prefetchStats("30").then(
+          (stats) => setImagesToday(stats.daily[stats.daily.length - 1]?.images ?? 0),
+          () => {},
+        ),
+      800,
+    );
     return () => clearTimeout(timer);
   }, []);
   usePolling(refresh);
 
   const open = members.find((m) => m.id === openId);
   const waiting = members.filter((m) => !m.activated).length;
+  const context = { members: members.length, waiting, imagesToday };
+  const quote = (recent: string[]) =>
+    recent.length ? pickQuote("admin", context, recent) : firstQuote("admin", context);
   function go(next: View) {
     setView(next);
     history.replaceState(null, "", next === "stats" ? "#statistika" : "#jamoa");
@@ -52,17 +67,20 @@ export function AdminPanel({ account, initial }: { account: Account; initial: In
       onView={go}
       nav={[
         { value: "team", label: "Jamoa" },
-        { value: "stats", label: "Statistika" },
+        {
+          value: "stats",
+          label: <NavLabel long="Statistika" short={<BarChart3 size={16} strokeWidth={1.9} aria-label="Statistika" />} />,
+        },
       ]}
     >
       {view === "stats" ? (
-        <StatsView />
+        <StatsView role="admin" />
       ) : (
         <>
           <PageHead
-            eyebrow={<span className="eyebrow-accent">Boshqaruv</span>}
-            title="Jamoa."
-            dim="Kim qaysi rolda."
+            eyebrow={<span className="eyebrow-accent">Boshqaruv · Jamoa</span>}
+            title={`Salom, ${givenName(account.name)}.`}
+            dim={<TypedLine next={quote} />}
             lead="Hodim qo‘shing va login bering. Parolni hodim o‘zi «Ro‘yxatdan o‘tish» orqali yaratadi."
             action={
               <button className="btn btn-primary btn-lg" onClick={() => setForm({})}>

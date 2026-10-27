@@ -7,9 +7,10 @@ export const runtime = "nodejs";
 
 export async function GET(request: Request) {
   return api(async () => {
-    await requireUser("admin");
+    // Har kim o‘z doirasini ko‘radi: admin — jamoa, PM — o‘z vazifalari, dizayner — o‘zi.
+    const user = await requireUser("admin", "pm", "designer");
     const value = new URL(request.url).searchParams.get("period");
     const period: Stats["period"] = value === "7" || value === "30" ? value : "all";
-    return { stats: await getStats(await db(), period) };
+    return { stats: await getStats(await db(), period, user) };
   });
 }

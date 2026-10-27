@@ -63,6 +63,10 @@ async function initialize(): Promise<Client> {
       name TEXT NOT NULL, size INTEGER NOT NULL, mime TEXT NOT NULL, data TEXT NOT NULL,
       created_at TEXT NOT NULL
     )`,
+      `CREATE TABLE IF NOT EXISTS assignment_links (
+      id TEXT PRIMARY KEY, assignment_id TEXT NOT NULL, url TEXT NOT NULL, created_at TEXT NOT NULL
+    )`,
+      "CREATE INDEX IF NOT EXISTS assignment_links_assignment ON assignment_links(assignment_id)",
       `CREATE TABLE IF NOT EXISTS assignment_events (
       id TEXT PRIMARY KEY, assignment_id TEXT NOT NULL, member_id TEXT NOT NULL,
       action TEXT NOT NULL, message TEXT NOT NULL DEFAULT '', created_at TEXT NOT NULL

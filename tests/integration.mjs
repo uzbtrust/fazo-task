@@ -61,12 +61,13 @@ async function login(username, password) {
 }
 
 /** Admin hodim qo‘shadi, hodim esa o‘zi parol yaratadi. Chekka holatlar faqat birinchisida tekshiriladi. */
-async function addMember(suffix, role, edgeCases = false) {
+async function addMember(suffix, role, edgeCases = false, register = true) {
   const username = `${runId}.${suffix}`;
   const data = status(await admin.request("/api/members", { method: "POST", body: { name: `QA ${runId} ${suffix}`, role, username } }), 201, `Create ${role}`);
   assert.equal(data.member.activated, false, "New member has no password yet");
   fixtures.members.push(data.member.id);
   const password = randomBytes(12).toString("base64url");
+  if (!register) return { id: data.member.id, username, password };
   if (edgeCases) {
     status(await client().request("/api/auth/login", { method: "POST", body: { username, password } }), 409, "Login before registration explains next step");
     const check = status(await client().request("/api/auth/register", { method: "POST", body: { username } }), 200, "Registration finds login");
@@ -122,7 +123,7 @@ async function main() {
 
   status(await pm.request("/api/members"), 200, "PM reads designers");
   status(await designerA.session.request("/api/members"), 403, "Designer cannot read the roster");
-  status(await pm.request("/api/stats"), 403, "PM has no statistics access");
+  status(await pm.request("/api/stats?period=7"), 200, "PM has statistics of own tasks");
   status(await designerA.session.request("/api/tasks", { method: "POST", body: { title: "X", brief: "X", imageCount: 1 } }), 403, "Designer cannot create tasks");
   const valid = { title: `QA ${runId} karusel`, brief: "5 slaydli karusel.", imageCount: 2 };
   for (const [body, label] of [
@@ -141,6 +142,23 @@ async function main() {
   assert.equal(created.status, "todo");
   assert.equal(created.briefFiles.length, 1);
   status(await pm.request("/api/tasks", { method: "POST", body: { ...valid, fileIds: [brief.file.id] } }), 400, "A TZ file links to one task only");
+  const refImage = status(await upload(pm, "namuna.png", PNG), 201, "PM uploads a reference image").file;
+  status(await pm.request("/api/tasks", { method: "POST", body: { ...valid, links: ["javascript:alert(1)"] } }), 400, "Only http(s) links");
+  const withRefs = status(await pm.request("/api/tasks", {
+    method: "POST",
+    body: { ...valid, title: `QA ${runId} referensli`, referenceIds: [refImage.id], links: ["https://www.pinterest.com/pin/1/", "https://www.behance.net/gallery/2"] },
+  }), 201, "PM posts a task with references").task;
+  fixtures.tasks.push(withRefs.id);
+  assert.equal(withRefs.referenceFiles.length, 1);
+  assert.equal(withRefs.referenceFiles[0].kind, "reference");
+  assert.deepEqual(withRefs.links.map((l) => l.url), ["https://www.pinterest.com/pin/1/", "https://www.behance.net/gallery/2"]);
+  const relinked = status(await pm.request(`/api/tasks/${withRefs.id}`, {
+    method: "PATCH",
+    body: { action: "edit", links: ["https://dribbble.com/shots/3"], removeFileIds: [refImage.id] },
+  }), 200, "PM edits references").task;
+  assert.deepEqual(relinked.links.map((l) => l.url), ["https://dribbble.com/shots/3"], "Links are replaced on edit");
+  assert.equal(relinked.referenceFiles.length, 0, "Reference image removed");
+  status(await pm.request(refImage.url), 404, "Removed reference image is gone");
   const page = status(await pm.request("/"), 200, "PM panel renders on the server");
   assert.ok(page.includes(`QA ${runId} karusel`), "Task list arrives with the first HTML");
 
@@ -217,7 +235,36 @@ async function main() {
   assert.equal(row.onTime, 1, "Finished before the deadline");
   assert.equal(row.returns, 0);
   assert.equal(stats.managers.find((m) => m.id === manager.id).accepted, 1);
-  console.log("✓ Statistics count designs and deadlines per designer");
+  const own = status(await winner.session.request("/api/stats?period=7"), 200, "Designer sees own statistics").stats;
+  assert.equal(own.scope, "designer");
+  assert.deepEqual(own.designers.map((d) => d.id), [winner.id], "Designer sees only themselves");
+  assert.equal(own.daily.length, 7, "Seven daily points");
+  assert.equal(own.daily[own.daily.length - 1].images, 2, "Today's designs are counted");
+  const pmStats = status(await pm.request("/api/stats?period=30"), 200, "PM sees statistics of own tasks").stats;
+  assert.equal(pmStats.scope, "pm");
+  assert.ok(pmStats.totals.created >= 2, "PM sees how many TZ they posted");
+  assert.equal(pmStats.totals.images, 2, "PM sees designs made on their tasks");
+  assert.ok(pmStats.dailyBy && !Object.keys(pmStats.dailyBy).length, "Per-designer charts are admin-only");
+  const teamStats = status(await admin.request("/api/stats?period=30"), 200, "Admin sees the whole team").stats;
+  assert.equal(teamStats.dailyBy[winner.id].length, 30, "Admin gets a daily chart per designer");
+  console.log("✓ Statistics: designer sees own days, PM own tasks, admin the whole team");
+
+  const renamed = `${runId}.y1`;
+  const renameResult = status(await admin.request(`/api/members/${winner.id}`, { method: "PATCH", body: { username: renamed.toUpperCase() } }), 200, "Admin changes a login").member;
+  assert.equal(renameResult.username, renamed, "Logins are stored lower-case");
+  const stillIn = status(await winner.session.request("/api/me"), 200, "Open session survives a login change").user;
+  assert.equal(stillIn.username, renamed);
+  status(await client().request("/api/auth/login", { method: "POST", body: { username: winner.username, password: winner.password } }), 401, "Old login stops working");
+  await login(renamed, winner.password);
+  status(await admin.request(`/api/members/${loser.id}`, { method: "PATCH", body: { username: renamed } }), 409, "Taken login is rejected");
+  winner.username = renamed;
+  const late = await addMember("kechikkan", "designer", false, false);
+  const lateLogin = `${runId}.k2`;
+  status(await admin.request(`/api/members/${late.id}`, { method: "PATCH", body: { username: lateLogin } }), 200, "Rename before registration");
+  status(await client().request("/api/auth/register", { method: "POST", body: { username: late.username } }), 404, "Old login cannot register");
+  const lateSession = client();
+  status(await lateSession.request("/api/auth/register", { method: "POST", body: { username: lateLogin, password: late.password } }), 200, "New login registers");
+  console.log("✓ Login changes: open sessions stay, old login stops, new login works");
 
   status(await admin.request(`/api/members/${loser.id}/reset`, { method: "POST" }), 200, "Admin resets a password");
   status(await loser.session.request("/api/me"), 401, "Reset signs the member out");

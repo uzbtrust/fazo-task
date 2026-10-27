@@ -28,7 +28,7 @@ try {
     throw new Error("A fixture member touched a real task. Nothing was deleted.");
   }
   for (const task of tasks) {
-    for (const table of ["attachments", "assignment_events"])
+    for (const table of ["attachments", "assignment_events", "assignment_links"])
       await tx.execute({ sql: `DELETE FROM ${table} WHERE assignment_id=?`, args: [task.id] });
     await tx.execute({ sql: "DELETE FROM assignments WHERE id=?", args: [task.id] });
   }

@@ -13,7 +13,7 @@ export function PageHead({
 }: {
   eyebrow: ReactNode;
   title: string;
-  dim: string;
+  dim: ReactNode;
   lead: string;
   action?: ReactNode;
 }) {

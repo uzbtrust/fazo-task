@@ -50,7 +50,7 @@ export async function api<T>(
 }
 
 /* ---- Sana: hammasi Toshkent vaqtida ---------------------------------- */
-const months = [
+export const months = [
   "yanvar", "fevral", "mart", "aprel", "may", "iyun",
   "iyul", "avgust", "sentabr", "oktabr", "noyabr", "dekabr",
 ];
