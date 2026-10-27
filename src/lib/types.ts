@@ -2,7 +2,7 @@
 export type Role = "admin" | "pm" | "designer";
 export type TaskStatus = "todo" | "in_progress" | "in_review" | "done" | "cancelled";
 export type Priority = 1 | 2 | 3 | 4 | 5;
-export type FileKind = "brief" | "result";
+export type FileKind = "brief" | "reference" | "result";
 
 export interface Account {
   id: string;
@@ -37,6 +37,10 @@ export interface FileMeta {
   ownerId: string;
   url: string;
 }
+export interface TaskLink {
+  id: string;
+  url: string;
+}
 export interface TaskEvent {
   id: string;
   memberId: string;
@@ -66,6 +70,9 @@ export interface Task {
   submittedAt: string | null;
   completedAt: string | null;
   briefFiles: FileMeta[];
+  /** PM qo‘shgan namuna rasmlar va havolalar (Pinterest, Behance…). */
+  referenceFiles: FileMeta[];
+  links: TaskLink[];
   resultFiles: FileMeta[];
   events: TaskEvent[];
 }
@@ -89,8 +96,16 @@ export interface StatsRow {
   created: number;
   accepted: number;
 }
+export interface DailyPoint {
+  /** YYYY-MM-DD, Toshkent vaqti. */
+  date: string;
+  images: number;
+  tasks: number;
+}
 export interface Stats {
   period: "7" | "30" | "all";
+  /** Kim uchun: admin — butun jamoa, pm — o‘zi qo‘ygan vazifalar, designer — o‘zi. */
+  scope: Role;
   totals: {
     created: number;
     open: number;
@@ -100,7 +115,12 @@ export interface Stats {
     images: number;
     onTime: number;
     late: number;
+    avgHours: number | null;
   };
   designers: StatsRow[];
   managers: StatsRow[];
+  /** Kunlik bajarilgan dizaynlar (eski kunlardan bugungacha). */
+  daily: DailyPoint[];
+  /** Faqat admin: har bir dizaynerning kunlik grafigi. */
+  dailyBy: Record<string, DailyPoint[]>;
 }

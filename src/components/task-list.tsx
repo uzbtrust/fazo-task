@@ -3,6 +3,7 @@ import { CalendarDays, ChevronRight, Images } from "lucide-react";
 import type { Task } from "@/lib/types";
 import { Avatar, dueLabel, StatusGlyph, statusLabels, Stars } from "./ui";
 import { warmTask } from "./files";
+import { REVIEW_STEP } from "@/lib/workflow";
 
 /** Qaytarilgan vazifa: ish jarayonida, oxirgi PM javobi — «qaytarish». */
 export function returnNote(task: Task) {
@@ -37,6 +38,7 @@ export function TaskRow({
   const name = person === "creator" ? task.creatorName : task.assigneeName;
   const showPerson = person && name;
   const uploaded = task.resultFiles.length;
+  const showProgress = task.status !== "todo" && (REVIEW_STEP || uploaded > 0);
   return (
     <li className={`task-row is-${task.status}`}>
       <span className="row-glyph">
@@ -60,10 +62,18 @@ export function TaskRow({
         </span>
         <span className="row-meta">
           <Stars value={task.priority} />
-          <span className={`count-chip ${uploaded >= task.imageCount ? "is-full" : ""}`} title="Yuklangan / kerakli rasmlar">
-            <Images size={13} strokeWidth={1.8} aria-hidden="true" />
-            {task.status === "todo" ? `${task.imageCount} ta` : `${uploaded}/${task.imageCount}`}
-          </span>
+          {/* Yuklash ixtiyoriy bo‘lganda «0/1» chalg‘itadi — faqat kerakli rasm soni ko‘rsatiladi. */}
+          {showProgress ? (
+            <span className={`count-chip ${uploaded >= task.imageCount ? "is-full" : ""}`} title="Yuklangan / kerakli rasmlar">
+              <Images size={13} strokeWidth={1.8} aria-hidden="true" />
+              {uploaded}/{task.imageCount}
+            </span>
+          ) : (
+            <span className="count-chip" title="Kerakli rasmlar soni">
+              <Images size={13} strokeWidth={1.8} aria-hidden="true" />
+              {task.imageCount} ta
+            </span>
+          )}
           {due && (
             <span className={`due due-${due.tone || "plain"}`}>
               <CalendarDays size={13} strokeWidth={1.8} aria-hidden="true" />
@@ -113,4 +123,15 @@ export function TaskGroups({
         ))}
     </div>
   );
+}
+
+/** Bugun (Toshkent vaqti) tugatilgan vazifalar va ulardagi dizaynlar. */
+export function doneToday(tasks: Task[], today: string) {
+  const done = tasks.filter(
+    (t) =>
+      t.status === "done" &&
+      t.completedAt &&
+      new Intl.DateTimeFormat("en-CA", { timeZone: "Asia/Tashkent" }).format(new Date(t.completedAt)) === today,
+  );
+  return { tasks: done.length, images: done.reduce((sum, t) => sum + t.imageCount, 0) };
 }

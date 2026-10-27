@@ -2,7 +2,7 @@ import { randomUUID } from "node:crypto";
 import { requireUser } from "@/lib/auth";
 import { db } from "@/lib/db";
 import { api, ApiError, checkOrigin, readBody } from "@/lib/server";
-import { addEvent, fileIds, getTasks, linkBriefFiles, taskFields } from "@/lib/tasks";
+import { addEvent, fileIds, getTasks, linkFiles, linkUrls, saveLinks, taskFields } from "@/lib/tasks";
 export const runtime = "nodejs";
 
 export async function GET() {
@@ -21,6 +21,8 @@ export async function POST(request: Request) {
     const body = await readBody(request);
     const fields = taskFields(body);
     const files = fileIds(body.fileIds);
+    const references = fileIds(body.referenceIds);
+    const links = linkUrls(body.links);
     if (!fields.brief && !files.length)
       throw new ApiError(400, "TZ ni matn bilan yozing yoki fayl yuklang.");
     const database = await db();
@@ -44,7 +46,9 @@ export async function POST(request: Request) {
           now,
         ],
       });
-      await linkBriefFiles(tx, id, files, user.id);
+      await linkFiles(tx, id, files, user.id, "brief");
+      await linkFiles(tx, id, references, user.id, "reference");
+      await saveLinks(tx, id, links);
       await addEvent(tx, id, user.id, "created");
       await tx.commit();
     } catch (error) {

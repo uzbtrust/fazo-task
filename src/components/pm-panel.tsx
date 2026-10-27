@@ -1,18 +1,22 @@
 "use client";
 import { useCallback, useEffect, useMemo, useState } from "react";
-import { ChevronDown, ChevronRight, CircleCheck, Plus, Search, UserRound, Users, X } from "lucide-react";
+import { BarChart3, ChevronDown, ChevronRight, CircleCheck, Plus, Search, UserRound, Users, X } from "lucide-react";
 import type { Account, Member, Task, TaskStatus } from "@/lib/types";
 import type { Initial } from "@/lib/initial";
 import { REVIEW_STEP } from "@/lib/workflow";
-import { api, Avatar, givenName, isOverdue, Modal, Segmented, todayEyebrow } from "./ui";
+import { api, Avatar, givenName, isOverdue, Modal, Segmented, todayEyebrow, todayISO } from "./ui";
 import { Empty, Facts, PageHead, rise } from "./page-parts";
-import { Shell, usePolling, useToast } from "./shell";
-import { sortTasks, TaskGroups } from "./task-list";
+import { NavLabel, Shell, usePolling, useToast } from "./shell";
+import { doneToday, sortTasks, TaskGroups } from "./task-list";
 import { TaskForm } from "./task-form";
 import { TaskSheet } from "./task-sheet";
 import { useWarmFiles } from "./files";
+import { StatsView } from "./stats-view";
+import { TypedLine } from "./typed-line";
+import { firstQuote, pickQuote } from "./quotes";
 
-type View = "tasks" | "designers";
+type View = "tasks" | "designers" | "stats";
+const HASH: Record<View, string> = { tasks: "#vazifalar", designers: "#dizaynerlar", stats: "#statistika" };
 type Filter = "all" | TaskStatus | "overdue";
 
 export function PmPanel({ account, initial }: { account: Account; initial: Initial }) {
@@ -33,14 +37,15 @@ export function PmPanel({ account, initial }: { account: Account; initial: Initi
     setDesigners(memberData.members);
   }, []);
   useEffect(() => {
-    if (window.location.hash === "#dizaynerlar") setView("designers");
+    const fromHash = (Object.keys(HASH) as View[]).find((v) => HASH[v] === window.location.hash);
+    if (fromHash) setView(fromHash);
   }, []);
   usePolling(refresh);
   useWarmFiles(tasks);
 
   function go(next: View) {
     setView(next);
-    history.replaceState(null, "", next === "designers" ? "#dizaynerlar" : "#vazifalar");
+    history.replaceState(null, "", HASH[next]);
     window.scrollTo({ top: 0 });
   }
   const upsert = (task: Task) =>
@@ -56,10 +61,16 @@ export function PmPanel({ account, initial }: { account: Account; initial: Initi
       onView={go}
       nav={[
         { value: "tasks", label: "Vazifalar", count: review || undefined },
-        { value: "designers", label: "Dizaynerlar" },
+        { value: "designers", label: <NavLabel long="Dizaynerlar" short={<Users size={16} strokeWidth={1.9} aria-label="Dizaynerlar" />} /> },
+        {
+          value: "stats",
+          label: <NavLabel long="Statistika" short={<BarChart3 size={16} strokeWidth={1.9} aria-label="Statistika" />} />,
+        },
       ]}
     >
-      {view === "tasks" ? (
+      {view === "stats" ? (
+        <StatsView role="pm" />
+      ) : view === "tasks" ? (
         <PmTasks account={account} tasks={tasks} designers={designers} onNew={() => setForm({})} onOpen={(task) => setOpenTaskId(task.id)} />
       ) : (
         <PmDesigners designers={designers} onOpen={(d) => setOpenDesignerId(d.id)} />
@@ -160,6 +171,16 @@ function PmTasks({
     }),
     [tasks],
   );
+  const finished = doneToday(tasks, todayISO());
+  const context = {
+    total: tasks.length,
+    open: counts.todo,
+    inProgress: counts.in_progress,
+    doneToday: finished.tasks,
+    imagesToday: finished.images,
+    overdue: counts.overdue,
+  };
+  const quote = (recent: string[]) => (recent.length ? pickQuote("pm", context, recent) : firstQuote("pm", context));
   const needle = query.trim().toLowerCase();
   const visible = tasks
     .filter(
@@ -193,9 +214,9 @@ function PmTasks({
             <span className="eyebrow-accent">{today.date}</span> · {today.weekday}
           </>
         }
-        title="Vazifalar."
-        dim="Dizaynerlar nima qilyapti."
-        lead={`Salom, ${givenName(account.name)}. Vazifani qo‘ying — dizaynerlar o‘zlari olishadi. Kerak bo‘lsa, vazifani tahrirlang yoki bekor qiling.`}
+        title={`Salom, ${givenName(account.name)}.`}
+        dim={<TypedLine next={quote} />}
+        lead="Vazifani qo‘ying — dizaynerlar o‘zlari olishadi. Kerak bo‘lsa, vazifani tahrirlang yoki bekor qiling."
         action={newButton}
       />
       <Facts<Filter>

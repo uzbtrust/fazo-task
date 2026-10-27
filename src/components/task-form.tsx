@@ -2,8 +2,9 @@
 import { FormEvent, useId, useState } from "react";
 import { Minus, Plus } from "lucide-react";
 import type { FileMeta, Priority, Task } from "@/lib/types";
-import { addDaysISO, api, ErrorMessage, Modal, Spinner, StarPicker, todayISO } from "./ui";
-import { Attachments, FileDrop, useUploader } from "./files";
+import { api, ErrorMessage, Modal, Spinner, StarPicker } from "./ui";
+import { Attachments, FileDrop, LinkAdder, LinkCards, useUploader } from "./files";
+import { DatePicker } from "./date-picker";
 
 export function TaskForm({
   task,
@@ -15,7 +16,6 @@ export function TaskForm({
   onSaved: (task: Task) => void;
 }) {
   const formId = useId();
-  const dateId = useId();
   const countId = useId();
   const [title, setTitle] = useState(task?.title || "");
   const [brief, setBrief] = useState(task?.brief || "");
@@ -24,17 +24,16 @@ export function TaskForm({
   const [priority, setPriority] = useState<Priority | null>(task?.priority ?? null);
   const [kept, setKept] = useState<FileMeta[]>(task?.briefFiles || []);
   const [added, setAdded] = useState<FileMeta[]>([]);
+  const [keptRefs, setKeptRefs] = useState<FileMeta[]>(task?.referenceFiles || []);
+  const [addedRefs, setAddedRefs] = useState<FileMeta[]>([]);
+  const [links, setLinks] = useState<string[]>(task?.links.map((l) => l.url) || []);
   const uploader = useUploader();
+  const refUploader = useUploader();
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState("");
   const count = Number(imageCount);
   const files = [...kept, ...added];
-  const quick = [
-    { label: "Bugun", value: todayISO() },
-    { label: "Ertaga", value: addDaysISO(1) },
-    { label: "3 kun", value: addDaysISO(3) },
-    { label: "1 hafta", value: addDaysISO(7) },
-  ];
+  const references = [...keptRefs, ...addedRefs];
   async function save(e: FormEvent) {
     e.preventDefault();
     setError("");
@@ -44,7 +43,16 @@ export function TaskForm({
     }
     setBusy(true);
     try {
-      const fields = { title, brief, imageCount: count, priority, dueDate: dueDate || null };
+      const fields = {
+        title,
+        brief,
+        imageCount: count,
+        priority,
+        dueDate: dueDate || null,
+        fileIds: added.map((f) => f.id),
+        referenceIds: addedRefs.map((f) => f.id),
+        links,
+      };
       const data = await api<{ task: Task }>(task ? `/api/tasks/${task.id}` : "/api/tasks", {
         method: task ? "PATCH" : "POST",
         body: JSON.stringify(
@@ -52,10 +60,12 @@ export function TaskForm({
             ? {
                 action: "edit",
                 ...fields,
-                fileIds: added.map((f) => f.id),
-                removeFileIds: task.briefFiles.filter((f) => !kept.includes(f)).map((f) => f.id),
+                removeFileIds: [
+                  ...task.briefFiles.filter((f) => !kept.includes(f)),
+                  ...task.referenceFiles.filter((f) => !keptRefs.includes(f)),
+                ].map((f) => f.id),
               }
-            : { ...fields, fileIds: added.map((f) => f.id) },
+            : fields,
         ),
       });
       onSaved(data.task);
@@ -112,6 +122,39 @@ export function TaskForm({
           />
         </div>
         <div className="field">
+          <span className="field-label">
+            Referenslar <span className="optional">ixtiyoriy · namuna rasmlar va havolalar</span>
+          </span>
+          <div className="reference-box">
+            <FileDrop
+              busy={refUploader.busy}
+              imagesOnly
+              title="Namuna rasm qo‘shish"
+              hint="Qanday uslub kerakligini ko‘rsating · 4 MB gacha"
+              onFiles={(list) => refUploader.upload(list, (file) => setAddedRefs((prev) => [...prev, file]))}
+            />
+            <ErrorMessage message={refUploader.error} />
+            <Attachments
+              files={references}
+              layout="board"
+              canRemove={() => true}
+              onRemove={(file) => {
+                setKeptRefs((prev) => prev.filter((f) => f.id !== file.id));
+                setAddedRefs((prev) => prev.filter((f) => f.id !== file.id));
+              }}
+            />
+            <LinkAdder
+              onAdd={(url) => {
+                if (links.includes(url)) return "Bu havola allaqachon qo‘shilgan.";
+                if (links.length >= 20) return "Ko‘pi bilan 20 ta havola.";
+                setLinks((prev) => [...prev, url]);
+                return null;
+              }}
+            />
+            <LinkCards links={links.map((url) => ({ url }))} onRemove={(url) => setLinks((prev) => prev.filter((l) => l !== url))} />
+          </div>
+        </div>
+        <div className="field">
           <label className="field-label" htmlFor={countId}>
             Nechta rasm kerak
           </label>
@@ -147,25 +190,10 @@ export function TaskForm({
           </div>
         </div>
         <div className="field">
-          <label className="field-label" htmlFor={dateId}>
+          <span className="field-label">
             Muddat <span className="optional">ixtiyoriy</span>
-          </label>
-          <div className="date-row">
-            <input id={dateId} className="input date-input" type="date" value={dueDate} onChange={(e) => setDueDate(e.target.value)} />
-            <div className="quick-dates" role="group" aria-label="Tezkor muddat">
-              {quick.map((q) => (
-                <button
-                  key={q.label}
-                  type="button"
-                  className={`chip-button ${dueDate === q.value ? "is-on" : ""}`}
-                  aria-pressed={dueDate === q.value}
-                  onClick={() => setDueDate(dueDate === q.value ? "" : q.value)}
-                >
-                  {q.label}
-                </button>
-              ))}
-            </div>
-          </div>
+          </span>
+          <DatePicker label="Muddat" value={dueDate} onChange={setDueDate} />
         </div>
         <div className="field">
           <span className="field-label">
@@ -183,7 +211,7 @@ export function TaskForm({
           type="submit"
           form={formId}
           className="btn btn-primary"
-          disabled={busy || uploader.busy || !title.trim() || !count}
+          disabled={busy || uploader.busy || refUploader.busy || !title.trim() || !count}
         >
           {busy ? <Spinner label="Saqlanmoqda" /> : task ? "Saqlash" : "Vazifani qo‘yish"}
         </button>

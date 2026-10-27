@@ -17,7 +17,7 @@ import {
   statusLabels,
   Stars,
 } from "./ui";
-import { Attachments, FileDrop, isImage, useUploader } from "./files";
+import { Attachments, FileDrop, isImage, LinkCards, useUploader } from "./files";
 import { returnNote } from "./task-list";
 import { useToast } from "./shell";
 
@@ -267,6 +267,14 @@ export function TaskSheet({
             {task.brief && <p className="sheet-text">{task.brief}</p>}
             <Attachments files={task.briefFiles} />
           </section>
+
+          {(task.referenceFiles.length > 0 || task.links.length > 0) && (
+            <section className="sheet-section">
+              <h3 className="sheet-section-title">Referenslar</h3>
+              <Attachments files={task.referenceFiles} layout="board" />
+              <LinkCards links={task.links} />
+            </section>
+          )}
 
           {(canUpload || task.resultFiles.length > 0 || task.resultNote) && (
             <section className="sheet-section">

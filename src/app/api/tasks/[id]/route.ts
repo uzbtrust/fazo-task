@@ -1,7 +1,7 @@
 import { requireUser } from "@/lib/auth";
 import { db } from "@/lib/db";
 import { api, ApiError, checkOrigin, readBody, text } from "@/lib/server";
-import { addEvent, fileIds, getTasks, linkBriefFiles, taskFields } from "@/lib/tasks";
+import { addEvent, fileIds, getTasks, linkFiles, linkUrls, saveLinks, taskFields } from "@/lib/tasks";
 import type { TaskStatus } from "@/lib/types";
 import { REVIEW_STEP } from "@/lib/workflow";
 export const runtime = "nodejs";
@@ -123,16 +123,20 @@ export async function PATCH(
           role("pm");
           const fields = taskFields({ ...task, ...body });
           const added = fileIds(body.fileIds);
+          const addedReferences = fileIds(body.referenceIds);
           const removed = fileIds(body.removeFileIds);
           const kept = task.briefFiles.filter((f) => !removed.includes(f.id));
           if (!fields.brief && !kept.length && !added.length)
             throw new ApiError(400, "TZ ni matn bilan yozing yoki fayl yuklang.");
           for (const fileId of removed)
             await tx.execute({
-              sql: "DELETE FROM attachments WHERE id=? AND assignment_id=? AND kind='brief'",
+              sql: "DELETE FROM attachments WHERE id=? AND assignment_id=? AND kind IN ('brief','reference')",
               args: [fileId, id],
             });
-          await linkBriefFiles(tx, id, added, user.id);
+          await linkFiles(tx, id, added, user.id, "brief");
+          await linkFiles(tx, id, addedReferences, user.id, "reference");
+          // Havolalar yuborilgan bo‘lsa, ro‘yxat to‘liq almashtiriladi.
+          if (body.links !== undefined) await saveLinks(tx, id, linkUrls(body.links));
           await tx.execute({
             sql: "UPDATE assignments SET title=?,brief=?,image_count=?,priority=?,due_date=? WHERE id=?",
             args: [fields.title, fields.brief, fields.imageCount, fields.priority, fields.dueDate, id],
@@ -173,6 +177,7 @@ export async function DELETE(
         { sql: "DELETE FROM assignments WHERE id=?", args: [id] },
         { sql: "DELETE FROM attachments WHERE assignment_id=?", args: [id] },
         { sql: "DELETE FROM assignment_events WHERE assignment_id=?", args: [id] },
+        { sql: "DELETE FROM assignment_links WHERE assignment_id=?", args: [id] },
       ],
       "write",
     );

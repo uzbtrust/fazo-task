@@ -15,7 +15,8 @@ async function readable(database: Database, user: Account, id: string) {
   ).rows[0];
   // Bog‘lanmagan fayl faqat yuklagan odamga. Vazifa fayli PMga va vazifani olgan dizaynerga;
   // ochiq vazifaning TZ fayllari esa barcha dizaynerlarga (olishdan oldin o‘qish uchun).
-  const openBrief = row?.status === "todo" && row.assignee_id === null && row.kind === "brief";
+  const openBrief =
+    row?.status === "todo" && row.assignee_id === null && (row.kind === "brief" || row.kind === "reference");
   const allowed =
     row &&
     (row.assignment_id
@@ -49,8 +50,8 @@ export async function DELETE(
     if (row.owner_id !== user.id) throw new ApiError(403, "Bu faylni o‘chira olmaysiz.");
     if (row.kind === "result" && row.status !== "in_progress")
       throw new ApiError(409, "Topshirilgan ishni o‘zgartirib bo‘lmaydi.");
-    if (row.kind === "brief" && row.assignment_id)
-      throw new ApiError(409, "TZ faylini vazifani tahrirlash orqali olib tashlang.");
+    if (row.kind !== "result" && row.assignment_id)
+      throw new ApiError(409, "TZ va referens fayllarini vazifani tahrirlash orqali olib tashlang.");
     await database.execute({ sql: "DELETE FROM attachments WHERE id=?", args: [row.id] });
     return { ok: true };
   });

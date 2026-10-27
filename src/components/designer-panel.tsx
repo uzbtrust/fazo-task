@@ -1,17 +1,21 @@
 "use client";
 import { useCallback, useEffect, useState } from "react";
-import { Inbox, Sparkles } from "lucide-react";
+import { BarChart3, Inbox, Sparkles } from "lucide-react";
 import type { Account, Task, TaskStatus } from "@/lib/types";
 import type { Initial } from "@/lib/initial";
 import { REVIEW_STEP } from "@/lib/workflow";
-import { api, givenName, todayEyebrow } from "./ui";
+import { api, givenName, isOverdue, todayEyebrow, todayISO } from "./ui";
 import { Empty, Facts, PageHead, rise } from "./page-parts";
-import { Shell, usePolling } from "./shell";
-import { returnNote, sortTasks, TaskGroups } from "./task-list";
+import { NavLabel, Shell, usePolling } from "./shell";
+import { doneToday, returnNote, sortTasks, TaskGroups } from "./task-list";
 import { TaskSheet } from "./task-sheet";
 import { useWarmFiles } from "./files";
+import { StatsView } from "./stats-view";
+import { TypedLine } from "./typed-line";
+import { firstQuote, pickQuote } from "./quotes";
 
-type View = "mine" | "open";
+type View = "mine" | "open" | "stats";
+const HASH: Record<View, string> = { mine: "#vazifalarim", open: "#ochiq", stats: "#statistika" };
 
 export function DesignerPanel({ account, initial }: { account: Account; initial: Initial }) {
   const [view, setView] = useState<View>("mine");
@@ -22,14 +26,15 @@ export function DesignerPanel({ account, initial }: { account: Account; initial:
     setTasks((await api<{ tasks: Task[] }>("/api/tasks")).tasks);
   }, []);
   useEffect(() => {
-    if (window.location.hash === "#ochiq") setView("open");
+    const fromHash = (Object.keys(HASH) as View[]).find((v) => HASH[v] === window.location.hash);
+    if (fromHash) setView(fromHash);
   }, []);
   usePolling(refresh);
   useWarmFiles(tasks);
 
   function go(next: View) {
     setView(next);
-    history.replaceState(null, "", next === "open" ? "#ochiq" : "#vazifalarim");
+    history.replaceState(null, "", HASH[next]);
     window.scrollTo({ top: 0 });
   }
   const mine = tasks.filter((t) => t.assigneeId === account.id);
@@ -37,10 +42,21 @@ export function DesignerPanel({ account, initial }: { account: Account; initial:
   const count = (status: TaskStatus) => mine.filter((t) => t.status === status).length;
   const visible = mine.filter((t) => filter === "all" || t.status === filter).sort(sortTasks);
   const open = tasks.find((t) => t.id === openId);
-  const today = todayEyebrow();
+  // Jumla holatga qarab: bo‘shmi, ish ko‘pmi, bugun samarali bo‘ldimi.
+  const today = doneToday(mine, todayISO());
+  const context = {
+    inProgress: count("in_progress"),
+    open: pool.length,
+    doneToday: today.tasks,
+    imagesToday: today.images,
+    overdue: mine.filter((t) => isOverdue(t.dueDate, t.status)).length,
+  };
+  const quote = (recent: string[]) =>
+    recent.length ? pickQuote("designer", context, recent) : firstQuote("designer", context);
+  const date = todayEyebrow();
   const eyebrow = (
     <>
-      <span className="eyebrow-accent">{today.date}</span> · {today.weekday}
+      <span className="eyebrow-accent">{date.date}</span> · {date.weekday}
     </>
   );
 
@@ -50,16 +66,22 @@ export function DesignerPanel({ account, initial }: { account: Account; initial:
       view={view}
       onView={go}
       nav={[
-        { value: "mine", label: "Mening vazifalarim" },
-        { value: "open", label: "Ochiq vazifalar", count: pool.length || undefined },
+        { value: "mine", label: <NavLabel long="Mening vazifalarim" short="Vazifalarim" /> },
+        { value: "open", label: <NavLabel long="Ochiq vazifalar" short="Ochiq" />, count: pool.length || undefined },
+        {
+          value: "stats",
+          label: <NavLabel long="Statistika" short={<BarChart3 size={16} strokeWidth={1.9} aria-label="Statistika" />} />,
+        },
       ]}
     >
-      {view === "mine" ? (
+      {view === "stats" ? (
+        <StatsView role="designer" />
+      ) : view === "mine" ? (
         <>
           <PageHead
             eyebrow={eyebrow}
             title={`Salom, ${givenName(account.name)}.`}
-            dim={count("in_progress") ? `${count("in_progress")} ta ish qo‘lingizda.` : "Hozir qo‘lingiz bo‘sh."}
+            dim={<TypedLine next={quote} />}
             lead={
               REVIEW_STEP
                 ? "TZ ni o‘qing, tayyor rasmlarni yuklang va tekshiruvga topshiring."

@@ -1,6 +1,7 @@
 "use client";
 import { useEffect, useRef, useState } from "react";
 import {
+  ArrowUpRight,
   ChevronLeft,
   ChevronRight,
   Download,
@@ -8,6 +9,7 @@ import {
   FileArchive,
   FileImage,
   FileText,
+  Link2,
   Paperclip,
   Trash2,
   X,
@@ -45,21 +47,22 @@ function warm(file: FileMeta) {
 
 /** Kursor qatorga kelganda shu vazifaning fayllarini darhol yuklay boshlaydi. */
 export function warmTask(task: Task) {
-  for (const file of [...task.briefFiles, ...task.resultFiles]) void warm(file);
+  for (const file of taskFiles(task)) void warm(file);
 }
+const taskFiles = (task: Task) => [...task.briefFiles, ...task.referenceFiles, ...task.resultFiles];
 
 /** Faol vazifalarning fayllarini fonda, birma-bir yuklaydi (eng ko‘pi 40 ta). */
 export function useWarmFiles(tasks: Task[]) {
   const key = tasks
     .filter((t) => t.status !== "done" && t.status !== "cancelled")
-    .flatMap((t) => [...t.briefFiles, ...t.resultFiles].map((f) => f.id))
+    .flatMap((t) => taskFiles(t).map((f) => f.id))
     .join(",");
   useEffect(() => {
     if (!key) return;
     let stopped = false;
     const queue = key.split(",").filter((id) => !warmed.has(id)).slice(0, 40);
     const files = new Map(
-      tasks.flatMap((t) => [...t.briefFiles, ...t.resultFiles]).map((f) => [f.id, f] as const),
+      tasks.flatMap(taskFiles).map((f) => [f.id, f] as const),
     );
     const next = () => {
       const id = queue.shift();
@@ -167,10 +170,13 @@ export function Attachments({
   files,
   canRemove,
   onRemove,
+  layout = "grid",
 }: {
   files: FileMeta[];
   canRemove?: (file: FileMeta) => boolean;
   onRemove?: (file: FileMeta) => void;
+  /** grid — bir xil kvadratlar; board — referenslar uchun asl nisbatdagi moodboard. */
+  layout?: "grid" | "board";
 }) {
   const [open, setOpen] = useState<number | null>(null);
   const images = files.filter(isImage);
@@ -179,7 +185,7 @@ export function Attachments({
   return (
     <div className="attachments">
       {images.length > 0 && (
-        <ul className="image-grid">
+        <ul className={layout === "board" ? "image-board" : "image-grid"}>
           {images.map((file, index) => (
             <li key={file.id} className="image-tile">
               <button type="button" className="image-open" onClick={() => setOpen(index)} aria-label={`${file.name} — kattalashtirish`}>
@@ -295,5 +301,121 @@ function Lightbox({
         </>
       )}
     </dialog>
+  );
+}
+
+/* ---- Referens havolalari ---------------------------------------------------- */
+const KNOWN_SITES: [RegExp, string][] = [
+  [/(^|\.)pinterest\./, "Pinterest"],
+  [/(^|\.)pin\.it$/, "Pinterest"],
+  [/(^|\.)behance\.net$/, "Behance"],
+  [/(^|\.)dribbble\.com$/, "Dribbble"],
+  [/(^|\.)instagram\.com$/, "Instagram"],
+  [/(^|\.)figma\.com$/, "Figma"],
+  [/(^|\.)canva\.com$/, "Canva"],
+  [/(^|\.)drive\.google\.com$/, "Google Drive"],
+  [/(^|\.)docs\.google\.com$/, "Google Docs"],
+  [/(^|\.)t\.me$/, "Telegram"],
+  [/(^|\.)youtube\.com$|(^|\.)youtu\.be$/, "YouTube"],
+  [/(^|\.)tiktok\.com$/, "TikTok"],
+];
+
+export function describeLink(url: string) {
+  try {
+    const parsed = new URL(url);
+    const host = parsed.hostname.replace(/^www\./, "");
+    const site = KNOWN_SITES.find(([pattern]) => pattern.test(host))?.[1];
+    const path = decodeURIComponent(parsed.pathname + parsed.search).replace(/\/$/, "");
+    return { site: site || host, host, path: path || "/", initial: (site || host)[0].toUpperCase() };
+  } catch {
+    return { site: url, host: url, path: "", initial: "#" };
+  }
+}
+
+export function LinkCards({
+  links,
+  onRemove,
+}: {
+  links: { id?: string; url: string }[];
+  onRemove?: (url: string) => void;
+}) {
+  if (!links.length) return null;
+  return (
+    <ul className="link-cards">
+      {links.map((link) => {
+        const info = describeLink(link.url);
+        return (
+          <li key={link.id || link.url} className="link-card">
+            <a href={link.url} target="_blank" rel="noopener noreferrer" className="link-open">
+              <span className={`link-badge site-${info.site.toLowerCase().replace(/[^a-z]/g, "")}`} aria-hidden="true">
+                {info.initial}
+              </span>
+              <span className="link-meta">
+                <strong>{info.site}</strong>
+                <small>{info.host + (info.path === "/" ? "" : info.path)}</small>
+              </span>
+              <ArrowUpRight className="link-arrow" size={16} strokeWidth={2} aria-hidden="true" />
+            </a>
+            {onRemove && (
+              <button type="button" className="icon-button is-danger" aria-label={`${info.site} havolasini olib tashlash`} onClick={() => onRemove(link.url)}>
+                <X size={15} strokeWidth={2.2} />
+              </button>
+            )}
+          </li>
+        );
+      })}
+    </ul>
+  );
+}
+
+/** Havola qo‘shish maydoni: Enter yoki «Qo‘shish» — havola ro‘yxatga tushadi. */
+export function LinkAdder({ onAdd }: { onAdd: (url: string) => string | null }) {
+  const [value, setValue] = useState("");
+  const [error, setError] = useState("");
+  function add() {
+    const raw = value.trim();
+    if (!raw) return;
+    const url = /^https?:\/\//i.test(raw) ? raw : `https://${raw}`;
+    try {
+      const parsed = new URL(url);
+      if (!parsed.hostname.includes(".")) throw new Error();
+    } catch {
+      setError("Havola noto‘g‘ri. Masalan: pinterest.com/pin/…");
+      return;
+    }
+    const problem = onAdd(url);
+    if (problem) setError(problem);
+    else {
+      setValue("");
+      setError("");
+    }
+  }
+  return (
+    <div>
+      <div className="link-adder">
+        <Link2 size={17} strokeWidth={1.8} aria-hidden="true" />
+        <input
+          type="url"
+          inputMode="url"
+          aria-label="Referens havolasi"
+          placeholder="Pinterest, Behance yoki boshqa havola"
+          value={value}
+          onChange={(e) => {
+            setValue(e.target.value);
+            setError("");
+          }}
+          onKeyDown={(e) => {
+            if (e.key === "Enter") {
+              e.preventDefault();
+              add();
+            }
+          }}
+        />
+        <button type="button" className="chip-button is-on" onClick={add} disabled={!value.trim()}>
+          Qo‘shish
+        </button>
+      </div>
+      {error && <p className="field-hint tone-warn">{error}</p>}
+    </div>
   );
 }
