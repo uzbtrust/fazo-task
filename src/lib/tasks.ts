@@ -1,28 +1,30 @@
-import { randomUUID } from "node:crypto";
-import type { Row, Database } from "./db";
+import type { Database, Row } from "./db";
 import { ApiError, text } from "./server";
-import type { Attachment, Priority, Task, TaskStatus, User } from "./types";
+import type { Employee, Priority, Task, TaskStatus } from "./types";
 
-export function attachment(row: Record<string, unknown>): Attachment {
+const STATUSES: TaskStatus[] = ["todo", "in_progress", "done"];
+
+export function employeeFields(body: Record<string, unknown>) {
   return {
-    id: String(row.id),
-    name: String(row.name),
-    size: Number(row.size),
-    mime: String(row.mime),
-    url: `/api/files/${row.id}`,
+    name: text(body.name, "Hodim ismini", 80),
+    position: text(body.position, "Lavozimni", 80, false),
   };
 }
 
 export function taskFields(body: Record<string, unknown>) {
   const title = text(body.title, "Vazifa nomini", 160);
-  const description = text(body.description, "Vazifani", 20000, false);
-  const priority = body.priority ?? "medium";
+  const description = text(body.description, "Tavsifni", 20000, false);
+  const priority = body.priority ?? 1;
   if (
-    typeof priority !== "string" ||
-    !["low", "medium", "high"].includes(priority)
+    typeof priority !== "number" || !Number.isInteger(priority) || priority < 1 || priority > 3
   )
-    throw new ApiError(400, "Muhimlik darajasi noto‘g‘ri.");
-  const category = text(body.category ?? "Dizayn", "Formatni", 60);
+    throw new ApiError(400, "Muhimlik 1 dan 3 gacha butun son bo‘lishi kerak.");
+  const status = body.status ?? "todo";
+  if (!STATUSES.includes(status as TaskStatus))
+    throw new ApiError(400, "Vazifa holati noto‘g‘ri.");
+  const assigneeId = body.assigneeId;
+  if (typeof assigneeId !== "string" || !assigneeId || assigneeId.length > 64)
+    throw new ApiError(400, "Vazifa uchun hodimni tanlang.");
   const dueDate =
     body.dueDate === undefined || body.dueDate === null || body.dueDate === ""
       ? null
@@ -41,152 +43,55 @@ export function taskFields(body: Record<string, unknown>) {
     title,
     description,
     priority: priority as Priority,
-    category,
+    status: status as TaskStatus,
+    assigneeId,
     dueDate: dueDate as string | null,
   };
 }
 
-export function fileIds(value: unknown): string[] {
-  if (value === undefined) return [];
-  if (
-    !Array.isArray(value) ||
-    value.length > 10 ||
-    value.some((x) => typeof x !== "string" || x.length > 64)
-  )
-    throw new ApiError(
-      400,
-      "Fayllar ro‘yxati noto‘g‘ri. Ko‘pi bilan 10 ta fayl tanlang.",
-    );
-  return [...new Set(value as string[])];
-}
-
-export async function linkFiles(
-  database: Database,
-  taskId: string,
-  ids: string[],
-  userId: string,
-  kind: "brief" | "delivery",
-) {
-  for (const id of ids) {
-    const row = (
-      await database.execute({
-        sql: "SELECT f.owner_id,tf.task_id FROM files f LEFT JOIN task_files tf ON tf.file_id=f.id WHERE f.id=?",
-        args: [id],
-      })
-    ).rows[0];
-    if (!row || row.owner_id !== userId)
-      throw new ApiError(400, "Fayl topilmadi yoki sizga tegishli emas.");
-    if (row.task_id)
-      throw new ApiError(
-        409,
-        "Bu fayl allaqachon boshqa vazifaga biriktirilgan.",
-      );
+export async function requireEmployee(database: Database, id: string) {
+  const row = (
     await database.execute({
-      sql: "INSERT INTO task_files(task_id,file_id,kind) VALUES (?,?,?)",
-      args: [taskId, id, kind],
-    });
-  }
+      sql: "SELECT id FROM employees WHERE id=? AND deleted_at IS NULL",
+      args: [id],
+    })
+  ).rows[0];
+  if (!row) throw new ApiError(400, "Tanlangan hodim topilmadi. Ro‘yxatni yangilang.");
 }
 
-export async function addActivity(
-  database: Database,
-  taskId: string,
-  userId: string,
-  action: string,
-  message = "",
-) {
-  await database.execute({
-    sql: "INSERT INTO activity(id,task_id,user_id,action,message,created_at) VALUES (?,?,?,?,?,?)",
-    args: [
-      randomUUID(),
-      taskId,
-      userId,
-      action,
-      message,
-      new Date().toISOString(),
-    ],
-  });
-}
-
-export function ownsTask(user: User, row: Row) {
-  if (
-    user.role !== "admin" &&
-    (user.role !== "creator" || row.creator_id !== user.id)
-  )
-    throw new ApiError(
-      403,
-      "Bu vazifani faqat uni yaratgan kontent kreator yoki administrator boshqaradi.",
-    );
+export function employee(row: Row): Employee {
+  return {
+    id: String(row.id),
+    name: String(row.name),
+    position: String(row.position),
+    createdAt: String(row.created_at),
+  };
 }
 
 export async function getTasks(
   database: Database,
   id?: string,
 ): Promise<Task[]> {
-  const args = id ? [id] : [];
-  const tasks = (
+  const rows = (
     await database.execute({
-      sql: `SELECT * FROM tasks${id ? " WHERE id=?" : ""} ORDER BY number DESC`,
-      args,
+      sql: `SELECT t.*,e.name AS assignee_name FROM team_tasks t
+        LEFT JOIN employees e ON e.id=t.assignee_id${id ? " WHERE t.id=?" : ""}
+        ORDER BY t.number DESC`,
+      args: id ? [id] : [],
     })
   ).rows;
-  if (!tasks.length) return [];
-  const files = (
-    await database.execute({
-      sql: `SELECT f.id,f.name,f.size,f.mime,tf.task_id,tf.kind FROM task_files tf JOIN files f ON f.id=tf.file_id${id ? " WHERE tf.task_id=?" : ""}`,
-      args,
-    })
-  ).rows;
-  const comments = (
-    await database.execute({
-      sql: `SELECT c.*,u.name AS user_name FROM comments c JOIN users u ON u.id=c.user_id${id ? " WHERE c.task_id=?" : ""} ORDER BY c.created_at,c.rowid`,
-      args,
-    })
-  ).rows;
-  const activity = (
-    await database.execute({
-      sql: `SELECT a.*,u.name AS user_name FROM activity a JOIN users u ON u.id=a.user_id${id ? " WHERE a.task_id=?" : ""} ORDER BY a.created_at,a.rowid`,
-      args,
-    })
-  ).rows;
-  return tasks.map((row) => ({
+  return rows.map((row) => ({
     id: String(row.id),
     number: Number(row.number),
     title: String(row.title),
     description: String(row.description),
-    priority: row.priority as Priority,
-    category: String(row.category),
+    priority: Number(row.priority) as Priority,
     dueDate: row.due_date ? String(row.due_date) : null,
     status: row.status as TaskStatus,
-    creatorId: String(row.creator_id),
-    assigneeId: row.assignee_id ? String(row.assignee_id) : null,
+    assigneeId: String(row.assignee_id),
+    assigneeName: row.assignee_name ? String(row.assignee_name) : "Hodim",
     createdAt: String(row.created_at),
     updatedAt: String(row.updated_at),
-    submissionText: String(row.submission_text),
-    attachments: files
-      .filter((f) => f.task_id === row.id && f.kind === "brief")
-      .map(attachment),
-    deliveryAttachments: files
-      .filter((f) => f.task_id === row.id && f.kind === "delivery")
-      .map(attachment),
-    comments: comments
-      .filter((c) => c.task_id === row.id)
-      .map((c) => ({
-        id: String(c.id),
-        userId: String(c.user_id),
-        userName: String(c.user_name),
-        message: String(c.message),
-        createdAt: String(c.created_at),
-      })),
-    activity: activity
-      .filter((a) => a.task_id === row.id)
-      .map((a) => ({
-        id: String(a.id),
-        userId: String(a.user_id),
-        userName: String(a.user_name),
-        action: String(a.action),
-        message: String(a.message),
-        createdAt: String(a.created_at),
-      })),
+    completedAt: row.completed_at ? String(row.completed_at) : null,
   }));
 }

@@ -10,53 +10,39 @@ const client = createClient({
 });
 const tx = await client.transaction("write");
 try {
-  const users = (
+  // Includes soft-deleted employees: the suite hides them, this removes them.
+  const employees = (
     await tx.execute({
-      sql: "SELECT id FROM users WHERE username LIKE ? AND name LIKE ?",
-      args: [`${prefix}%`, `QA ${prefix} %`],
+      sql: "SELECT id FROM employees WHERE name LIKE ?",
+      args: [`QA ${prefix} %`],
     })
-  ).rows;
-  const userIds = users.map((row) => String(row.id));
+  ).rows.map((row) => String(row.id));
   const tasks = (
     await tx.execute({
-      sql: "SELECT id,creator_id FROM tasks WHERE title LIKE ?",
+      sql: "SELECT id,assignee_id FROM team_tasks WHERE title LIKE ?",
       args: [`QA ${prefix} %`],
     })
   ).rows;
-  if (tasks.some((row) => !userIds.includes(String(row.creator_id)))) {
-    throw new Error("Fixture ownership does not match. Nothing was deleted.");
+  if (tasks.some((row) => !employees.includes(String(row.assignee_id)))) {
+    throw new Error("A fixture task belongs to a real employee. Nothing was deleted.");
   }
-  for (const task of tasks) {
-    for (const table of ["comments", "activity", "task_files"]) {
-      await tx.execute({
-        sql: `DELETE FROM ${table} WHERE task_id=?`,
-        args: [task.id],
-      });
-    }
-    await tx.execute({ sql: "DELETE FROM tasks WHERE id=?", args: [task.id] });
+  for (const id of employees) {
+    const outside = Number(
+      (
+        await tx.execute({
+          sql: "SELECT COUNT(*) AS count FROM team_tasks WHERE assignee_id=? AND title NOT LIKE ?",
+          args: [id, `QA ${prefix} %`],
+        })
+      ).rows[0].count,
+    );
+    if (outside) throw new Error("A fixture employee has unrelated tasks. Nothing was deleted.");
   }
-  for (const id of userIds) {
-    const outside = (
-      await tx.execute({
-        sql: "SELECT COUNT(*) AS count FROM tasks WHERE creator_id=? OR assignee_id=?",
-        args: [id, id],
-      })
-    ).rows[0];
-    if (Number(outside.count))
-      throw new Error("QA account has an unrelated task. Nothing was deleted.");
-    await tx.execute({
-      sql: "DELETE FROM sessions WHERE user_id=?",
-      args: [id],
-    });
-    await tx.execute({ sql: "DELETE FROM files WHERE owner_id=?", args: [id] });
-    await tx.execute({ sql: "DELETE FROM users WHERE id=?", args: [id] });
-  }
+  for (const task of tasks)
+    await tx.execute({ sql: "DELETE FROM team_tasks WHERE id=?", args: [task.id] });
+  for (const id of employees)
+    await tx.execute({ sql: "DELETE FROM employees WHERE id=?", args: [id] });
   await tx.commit();
-  console.log({
-    removedFixturePrefix: prefix,
-    users: users.length,
-    tasks: tasks.length,
-  });
+  console.log({ removedFixturePrefix: prefix, employees: employees.length, tasks: tasks.length });
 } catch (error) {
   if (!tx.closed) await tx.rollback();
   throw error;

@@ -4,7 +4,7 @@ import {
   api,
   ApiError,
   checkOrigin,
-  publicUser,
+  publicAccount,
   readBody,
   text,
 } from "@/lib/server";
@@ -26,7 +26,7 @@ export async function POST(request: Request) {
     const result = await (
       await db()
     ).execute({
-      sql: "SELECT * FROM users WHERE username=? COLLATE NOCASE",
+      sql: "SELECT * FROM users WHERE username=? COLLATE NOCASE AND deleted_at IS NULL",
       args: [username],
     });
     const row = result.rows[0];
@@ -35,9 +35,9 @@ export async function POST(request: Request) {
       password,
       row ? String(row.password_hash) : `${"0".repeat(32)}:${"0".repeat(128)}`,
     );
-    if (!row || !row.active || !valid)
+    if (!row || row.role !== "admin" || !row.active || !valid)
       throw new ApiError(401, "Login yoki parol noto‘g‘ri.");
     await createSession(String(row.id));
-    return { user: publicUser(row) };
+    return { user: publicAccount(row) };
   });
 }
