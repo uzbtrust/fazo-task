@@ -23,7 +23,7 @@ export async function PATCH(request: Request) {
     try {
       const row = (
         await transaction.execute({
-          sql: "SELECT password_hash FROM users WHERE id=?",
+          sql: "SELECT password_hash FROM members WHERE id=?",
           args: [user.id],
         })
       ).rows[0];
@@ -35,11 +35,11 @@ export async function PATCH(request: Request) {
       // Sign out every other device; this session stays.
       const token = (await cookies()).get(SESSION_COOKIE)?.value || "";
       await transaction.execute({
-        sql: "DELETE FROM sessions WHERE user_id=? AND token_hash<>?",
+        sql: "DELETE FROM member_sessions WHERE member_id=? AND token_hash<>?",
         args: [user.id, tokenHash(token)],
       });
       await transaction.execute({
-        sql: "UPDATE users SET password_hash=? WHERE id=?",
+        sql: "UPDATE members SET password_hash=? WHERE id=?",
         args: [passwordHash(next), user.id],
       });
       await transaction.commit();

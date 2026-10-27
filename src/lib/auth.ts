@@ -7,7 +7,7 @@ import {
 } from "node:crypto";
 import { db, passwordHash } from "./db";
 import { ApiError, publicAccount } from "./server";
-import type { Account } from "./types";
+import type { Account, Role } from "./types";
 
 export const SESSION_COOKIE = "fazo_session";
 export const tokenHash = (token: string) =>
@@ -27,42 +27,64 @@ export function checkPassword(password: string, stored: string): boolean {
   }
 }
 
-export async function currentUser(): Promise<Account | null> {
+/** Parol hali yaratilmagan hisoblar uchun ham vaqt sarfi bir xil bo‘lsin. */
+export const DUMMY_HASH = `${"0".repeat(32)}:${"0".repeat(128)}`;
+
+/** Sessiya 180 kun yashaydi va ishlatilgan sari uzayadi — foydalanuvchi o‘zi chiqmaguncha kirgan holda qoladi. */
+const SESSION_DAYS = 180;
+const REFRESH_AFTER_DAYS = 7;
+
+async function readSession() {
   const token = (await cookies()).get(SESSION_COOKIE)?.value;
   if (!token || !/^[a-f0-9]{64}$/.test(token)) return null;
   const database = await db();
-  const result = await database.execute({
-    sql: `SELECT u.* FROM sessions s JOIN users u ON s.user_id=u.id
-      WHERE s.token_hash=? AND s.expires_at>? AND u.active=1 AND u.deleted_at IS NULL
-        AND u.role='admin'`,
-    args: [tokenHash(token), new Date().toISOString()],
-  });
-  return result.rows[0] ? publicAccount(result.rows[0]) : null;
+  const row = (
+    await database.execute({
+      sql: `SELECT m.*,s.expires_at AS session_expires FROM member_sessions s JOIN members m ON s.member_id=m.id
+      WHERE s.token_hash=? AND s.expires_at>? AND m.deleted_at IS NULL
+        AND m.password_hash IS NOT NULL`,
+      args: [tokenHash(token), new Date().toISOString()],
+    })
+  ).rows[0];
+  return row ? { user: publicAccount(row), token, expiresAt: String(row.session_expires) } : null;
 }
 
-export async function requireUser(): Promise<Account> {
-  const user = await currentUser();
-  if (!user) throw new ApiError(401, "Davom etish uchun hisobingizga kiring.");
-  return user;
+/** Sahifa (server komponent) uchun: faqat o‘qiydi, cookie yozilmaydi. */
+export async function currentUser(): Promise<Account | null> {
+  return (await readSession())?.user ?? null;
 }
 
-export async function createSession(userId: string) {
-  const token = randomBytes(32).toString("hex");
-  const expiry = new Date(Date.now() + 7 * 24 * 60 * 60 * 1000);
+/** Route Handler uchun: ruxsatni tekshiradi va kerak bo‘lsa sessiya muddatini uzaytiradi. */
+export async function requireUser(...roles: Role[]): Promise<Account> {
+  const session = await readSession();
+  if (!session) throw new ApiError(401, "Davom etish uchun hisobingizga kiring.");
+  if (roles.length && !roles.includes(session.user.role))
+    throw new ApiError(403, "Bu amal sizning rolingiz uchun emas.");
+  const left = Date.parse(session.expiresAt) - Date.now();
+  if (left < (SESSION_DAYS - REFRESH_AFTER_DAYS) * 864e5) await writeSession(session.token, session.user.id, true);
+  return session.user;
+}
+
+async function writeSession(token: string, memberId: string, extend = false) {
+  const expiry = new Date(Date.now() + SESSION_DAYS * 864e5);
   const database = await db();
-  await database.batch(
-    [
-      {
-        sql: "DELETE FROM sessions WHERE expires_at < ?",
-        args: [new Date().toISOString()],
-      },
-      {
-        sql: "INSERT INTO sessions(token_hash,user_id,expires_at) VALUES (?,?,?)",
-        args: [tokenHash(token), userId, expiry.toISOString()],
-      },
-    ],
-    "write",
-  );
+  if (extend) {
+    await database.execute({
+      sql: "UPDATE member_sessions SET expires_at=? WHERE token_hash=?",
+      args: [expiry.toISOString(), tokenHash(token)],
+    });
+  } else {
+    await database.batch(
+      [
+        { sql: "DELETE FROM member_sessions WHERE expires_at < ?", args: [new Date().toISOString()] },
+        {
+          sql: "INSERT INTO member_sessions(token_hash,member_id,expires_at) VALUES (?,?,?)",
+          args: [tokenHash(token), memberId, expiry.toISOString()],
+        },
+      ],
+      "write",
+    );
+  }
   (await cookies()).set(SESSION_COOKIE, token, {
     httpOnly: true,
     secure: !!process.env.VERCEL,
@@ -72,6 +94,10 @@ export async function createSession(userId: string) {
   });
 }
 
+export async function createSession(memberId: string) {
+  await writeSession(randomBytes(32).toString("hex"), memberId);
+}
+
 export async function clearSession() {
   const jar = await cookies();
   const token = jar.get(SESSION_COOKIE)?.value;
@@ -79,7 +105,7 @@ export async function clearSession() {
     await (
       await db()
     ).execute({
-      sql: "DELETE FROM sessions WHERE token_hash=?",
+      sql: "DELETE FROM member_sessions WHERE token_hash=?",
       args: [tokenHash(token)],
     });
   jar.set(SESSION_COOKIE, "", {
@@ -111,7 +137,7 @@ export async function loginLimit(request: Request, username: string) {
     if (Number(result.rows[0]?.attempts) > max)
       throw new ApiError(
         429,
-        "Kirishga urinishlar ko‘paydi. 15 daqiqadan keyin qayta urinib ko‘ring.",
+        "Urinishlar ko‘paydi. 15 daqiqadan keyin qayta urinib ko‘ring.",
       );
   }
   // Keep the persisted limiter bounded without timers or server memory.

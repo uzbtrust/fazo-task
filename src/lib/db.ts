@@ -31,63 +31,83 @@ async function initialize(): Promise<Client> {
     throw new Error("Production requires a durable remote TURSO_DATABASE_URL.");
   }
   client ??= createClient({ url, authToken: process.env.TURSO_AUTH_TOKEN });
-  await client.batch(
+  // Rol va holatlar kodda tekshiriladi: yangi kasb yoki bosqich qo‘shilganda
+  // jadvalni qayta qurish shart emas. Eski users/tasks/employees jadvallariga tegilmaydi.
+  // Sovuq startda hammasi bitta so‘rovda: jadvallar va administrator borligi.
+  const setup = await client.batch(
     [
-      // The single sign-in account lives here. Older databases also hold
-      // retired creator/designer rows; only role='admin' can sign in.
-      `CREATE TABLE IF NOT EXISTS users (
-      id TEXT PRIMARY KEY, name TEXT NOT NULL, username TEXT NOT NULL UNIQUE COLLATE NOCASE,
-      password_hash TEXT NOT NULL, role TEXT NOT NULL DEFAULT 'admin',
-      active INTEGER NOT NULL DEFAULT 1, created_at TEXT NOT NULL, deleted_at TEXT
+      `CREATE TABLE IF NOT EXISTS members (
+      id TEXT PRIMARY KEY, name TEXT NOT NULL, username TEXT NOT NULL COLLATE NOCASE,
+      role TEXT NOT NULL, password_hash TEXT, created_at TEXT NOT NULL,
+      activated_at TEXT, deleted_at TEXT
     )`,
-      `CREATE TABLE IF NOT EXISTS sessions (
-      token_hash TEXT PRIMARY KEY, user_id TEXT NOT NULL REFERENCES users(id) ON DELETE CASCADE,
-      expires_at TEXT NOT NULL
+      `CREATE UNIQUE INDEX IF NOT EXISTS members_username
+      ON members(username COLLATE NOCASE) WHERE deleted_at IS NULL`,
+      `CREATE TABLE IF NOT EXISTS member_sessions (
+      token_hash TEXT PRIMARY KEY, member_id TEXT NOT NULL, expires_at TEXT NOT NULL
     )`,
       `CREATE TABLE IF NOT EXISTS login_attempts (
       key TEXT PRIMARY KEY, attempts INTEGER NOT NULL, reset_at INTEGER NOT NULL
     )`,
-      `CREATE TABLE IF NOT EXISTS employees (
-      id TEXT PRIMARY KEY, name TEXT NOT NULL, position TEXT NOT NULL DEFAULT '',
-      created_at TEXT NOT NULL, deleted_at TEXT
-    )`,
-      `CREATE TABLE IF NOT EXISTS team_tasks (
+      // assignee_id NULL — ochiq vazifa: hali hech bir dizayner olmagan.
+      `CREATE TABLE IF NOT EXISTS assignments (
       number INTEGER PRIMARY KEY AUTOINCREMENT, id TEXT NOT NULL UNIQUE, title TEXT NOT NULL,
-      description TEXT NOT NULL DEFAULT '',
-      priority INTEGER NOT NULL DEFAULT 1 CHECK(priority BETWEEN 1 AND 3),
-      due_date TEXT,
-      status TEXT NOT NULL DEFAULT 'todo' CHECK(status IN ('todo','in_progress','done')),
-      assignee_id TEXT NOT NULL REFERENCES employees(id),
-      created_at TEXT NOT NULL, updated_at TEXT NOT NULL, completed_at TEXT
+      brief TEXT NOT NULL DEFAULT '', image_count INTEGER NOT NULL, priority INTEGER,
+      due_date TEXT, status TEXT NOT NULL DEFAULT 'todo', assignee_id TEXT,
+      created_by TEXT NOT NULL, result_note TEXT NOT NULL DEFAULT '',
+      created_at TEXT NOT NULL, updated_at TEXT NOT NULL, claimed_at TEXT, submitted_at TEXT,
+      completed_at TEXT
     )`,
-      "CREATE INDEX IF NOT EXISTS sessions_expiry ON sessions(expires_at)",
-      "CREATE INDEX IF NOT EXISTS team_tasks_assignee ON team_tasks(assignee_id,status)",
+      `CREATE TABLE IF NOT EXISTS attachments (
+      id TEXT PRIMARY KEY, assignment_id TEXT, owner_id TEXT NOT NULL, kind TEXT NOT NULL,
+      name TEXT NOT NULL, size INTEGER NOT NULL, mime TEXT NOT NULL, data TEXT NOT NULL,
+      created_at TEXT NOT NULL
+    )`,
+      `CREATE TABLE IF NOT EXISTS assignment_events (
+      id TEXT PRIMARY KEY, assignment_id TEXT NOT NULL, member_id TEXT NOT NULL,
+      action TEXT NOT NULL, message TEXT NOT NULL DEFAULT '', created_at TEXT NOT NULL
+    )`,
+      "CREATE INDEX IF NOT EXISTS member_sessions_expiry ON member_sessions(expires_at)",
+      "CREATE INDEX IF NOT EXISTS assignments_assignee ON assignments(assignee_id,status)",
+      "CREATE INDEX IF NOT EXISTS attachments_assignment ON attachments(assignment_id)",
+      "CREATE INDEX IF NOT EXISTS assignment_events_assignment ON assignment_events(assignment_id,created_at)",
+      "SELECT COUNT(*) AS count FROM members WHERE role='admin' AND deleted_at IS NULL",
     ],
     "write",
   );
-  // Introspect and migrate under a write lock: concurrent cold starts cannot
-  // both decide to add the same column, and existing records are preserved.
-  const migration = await client.transaction("write");
-  try {
-    const columns = await migration.execute("PRAGMA table_info(users)");
-    if (!columns.rows.some((column) => column.name === "deleted_at")) {
-      await migration.execute("ALTER TABLE users ADD COLUMN deleted_at TEXT");
-    }
-    await migration.commit();
-  } catch (error) {
-    if (!migration.closed) await migration.rollback();
-    throw error;
-  }
-  await client.execute({
-    sql: `INSERT OR IGNORE INTO users (id,name,username,password_hash,role,active,created_at)
-      VALUES ('initial-admin','Administrator','admin',?,'admin',1,?)`,
-    args: [
-      passwordHash(process.env.ADMIN_INITIAL_PASSWORD || "admin"),
-      new Date().toISOString(),
-    ],
-  });
+  if (!Number(setup[setup.length - 1].rows[0].count)) await seedAdmin(client);
   return client;
 }
 
+/** Birinchi ishga tushirish: avvalgi versiyadagi administrator (paroli bilan) ko‘chiriladi, bo‘lmasa admin/admin. */
+async function seedAdmin(client: Client) {
+  const legacy = await client.execute(
+    "SELECT name FROM sqlite_master WHERE type='table' AND name='users'",
+  );
+  if (legacy.rows.length) {
+    const admins = (await client.execute("SELECT * FROM users WHERE role='admin'")).rows;
+    for (const row of admins) {
+      if (!row.active || row.deleted_at) continue;
+      await client.execute({
+        sql: `INSERT OR IGNORE INTO members(id,name,username,role,password_hash,created_at,activated_at)
+          VALUES (?,?,?,'admin',?,?,?)`,
+        args: [row.id, row.name, row.username, row.password_hash, row.created_at, row.created_at],
+      });
+    }
+  }
+  const now = new Date().toISOString();
+  await client.execute({
+    sql: `INSERT INTO members(id,name,username,role,password_hash,created_at,activated_at)
+      SELECT 'initial-admin','Administrator','admin','admin',?,?,?
+      WHERE NOT EXISTS (SELECT 1 FROM members WHERE role='admin' AND deleted_at IS NULL)`,
+    args: [passwordHash(process.env.ADMIN_INITIAL_PASSWORD || "admin"), now, now],
+  });
+}
+
 export type Database = Client | Transaction;
+
+/** Bir nechta o‘qish so‘rovini bitta tarmoq aylanishida bajaradi (tranzaksiya ichida ham). */
+export function readBatch(database: Database, statements: InStatement[]) {
+  return "commit" in database ? database.batch(statements) : database.batch(statements, "read");
+}
 export type { Row, InStatement };
