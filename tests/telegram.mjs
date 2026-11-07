@@ -290,6 +290,7 @@ async function main() {
   const cardD = await until(() => texts(tgD.id).find((x) => /Yangi vazifa/.test(x.text)), "D ham xabar oladi");
   ok(card.text.includes("&lt;karusel&gt;"), "Matn HTML'dan himoyalangan");
   ok(card.method === "sendPhoto", "Yangi vazifa rasm bilan keladi");
+  ok(calls.filter((x) => ["sendPhoto", "sendMessage"].includes(x.method)).every((x) => String(x.params.protect_content) === "false"), "Xabarlar himoyalanmaydi: skrinshot va ulashish mumkin");
   const uploads = calls.filter((x) => x.method === "sendPhoto" && /Yangi vazifa/.test(x.params.caption || ""));
   // Rasm har mavzu (tungi, kunduzgi) uchun bir marta chiziladi va yuklanadi, qolganlarga nusxasi ketadi.
   const pngs = uploads.filter((x) => x.params.photo?.head === "PNG").length;
