@@ -10,6 +10,11 @@ import type { TaskStatus } from "./types";
  */
 export const REVIEW_STEP = false;
 
+/** Vazifa bosqichlari (bekor qilish bosqich emas). Tekshiruv faqat yoqilganda. */
+export const STATUS_ORDER: TaskStatus[] = REVIEW_STEP
+  ? ["todo", "in_progress", "in_review", "done"]
+  : ["todo", "in_progress", "done"];
+
 export const statusLabels: Record<TaskStatus, string> = {
   todo: "Ochiq",
   in_progress: "Jarayonda",

@@ -1,5 +1,5 @@
 import { attemptLimit, checkPassword, DUMMY_HASH } from "../auth";
-import { addDaysISO, nowTime, todayISO } from "../dates";
+import { addDaysISO, isOverdue, nowTime, todayEyebrow, todayISO } from "../dates";
 import { db } from "../db";
 import { givenName, memberRoles, roleInfo } from "../roles";
 import { ApiError, publicAccount } from "../server";
@@ -9,11 +9,14 @@ import type { Account, Stats, Task } from "../types";
 import {
   action,
   edit,
+  editCaption,
+  editPhoto,
   escapeHtml,
   inline,
   link,
   say,
   sendFile,
+  sendPhoto,
   tg,
   webApp,
   type Keyboard,
@@ -30,13 +33,16 @@ import {
   unlinkMember,
   type TelegramUser,
 } from "./accounts";
-import { accountLine, LISTS, mainKeyboard, taskButton, taskKeyboard, taskText, type ListKind } from "./views";
+import { homeImage, statsImage, taskListImage, taskSheetImage, teamImage, type Lead, type ListGroup } from "./images";
+import { isMuted, setMuted } from "./reminders";
+import { accountLine, LISTS, mainKeyboard, taskButton, taskCaption, taskKeyboard, taskText, type ListKind } from "./views";
 
 interface Message {
   message_id: number;
   text?: string;
   from?: TelegramUser;
   chat: { id: number; type: string };
+  photo?: unknown[];
 }
 interface Callback {
   id: string;
@@ -74,6 +80,38 @@ async function clearState(telegramId: number) {
 const profile = (user: TelegramUser) => ({ id: user.id, name: telegramName(user), username: user.username });
 const cancelRow = [action("Bekor qilish", "cancel")];
 
+/**
+ * Rasmni ko‘rsatadi: bosilgan xabar joyida almashadi, bo‘lmasa yangisi yuboriladi.
+ * Rasm chizilmasa, xabar yo‘qolmasin — o‘sha matn oddiy ko‘rinishda ketadi.
+ */
+async function present(
+  chat: number,
+  messageId: number | undefined,
+  render: () => Promise<Buffer>,
+  caption: string,
+  keyboard: Keyboard,
+  fallback = caption,
+) {
+  const image = await render().catch((error) => {
+    console.error("Telegram rasm:", error instanceof Error ? error.message : "xato");
+    return null;
+  });
+  if (!image) {
+    if (messageId) return edit(chat, messageId, fallback, keyboard).catch(() => say(chat, fallback, inline(keyboard)));
+    return say(chat, fallback, inline(keyboard));
+  }
+  if (messageId) {
+    try {
+      await editPhoto(chat, messageId, image, caption, keyboard);
+      return;
+    } catch {
+      // Matnli xabarni rasmga aylantirib bo‘lmaydi: eskisi o‘chib, yangisi chiqadi.
+      await tg("deleteMessage", { chat_id: chat, message_id: messageId }).catch(() => {});
+    }
+  }
+  await sendPhoto(chat, image, caption, inline(keyboard));
+}
+
 /* ---- Kirish -------------------------------------------------------------- */
 async function showSignIn(chat: number, user: TelegramUser, notice?: string) {
   const token = await createToken("browser", { telegram: profile(user) });
@@ -93,24 +131,37 @@ async function showSignIn(chat: number, user: TelegramUser, notice?: string) {
   );
 }
 
-async function counts(account: Account) {
-  if (account.role === "admin") return "";
+async function homeFacts(account: Account) {
+  if (account.role === "admin") return [];
   const tasks = await visibleTasks(account);
-  if (account.role === "designer") {
-    const mine = tasks.filter(isMine(account)).length;
-    const open = tasks.filter(isOpen).length;
-    return `Jarayonda: ${mine} · Ochiq: ${open}`;
-  }
-  return `Jarayonda: ${tasks.filter((t) => t.status === "in_progress").length} · Ochiq: ${tasks.filter(isOpen).length}`;
+  const working = tasks.filter(account.role === "designer" ? isMine(account) : (t) => t.status === "in_progress");
+  const late = tasks.filter((t) => !isFinished(t) && isOverdue(t.dueDate, t.status, t.dueTime)).length;
+  return [
+    { label: "Jarayonda", value: String(working.length), tone: "accent" as const },
+    { label: "Ochiq", value: String(tasks.filter(isOpen).length) },
+    ...(late ? [{ label: "Muddati o‘tgan", value: String(late), tone: "bad" as const }] : []),
+  ];
 }
 
-async function showHome(chat: number, account: Account, heading?: string) {
-  const line = await counts(account);
-  await say(
-    chat,
-    [heading || `Salom, ${escapeHtml(givenName(account.name))}.`, line].filter(Boolean).join("\n\n"),
-    mainKeyboard(account.role),
-  );
+async function showHome(chat: number, account: Account, heading?: string, lead?: Lead) {
+  const facts = await homeFacts(account);
+  const caption = heading || `Salom, ${escapeHtml(givenName(account.name))}.`;
+  const today = todayEyebrow();
+  const keyboard = mainKeyboard(account.role);
+  try {
+    const image = await homeImage({
+      accent: today.date,
+      eyebrow: today.weekday,
+      title: `Salom, ${givenName(account.name)}.`,
+      dim: account.role === "admin" ? "Jamoa bir qarashda." : "Bugungi ishlaringiz.",
+      lead,
+      facts,
+    });
+    await sendPhoto(chat, image, caption, keyboard);
+  } catch (error) {
+    console.error("Telegram rasm:", error instanceof Error ? error.message : "xato");
+    await say(chat, caption, keyboard);
+  }
 }
 
 /** Istalgan yo‘l bilan kirilgandan keyin: salomlashadi va kutib turgan so‘rovni davom ettiradi. */
@@ -118,7 +169,10 @@ export async function afterLinked(telegramId: number | string, account: Account)
   const id = Number(telegramId);
   const state = await getState(id);
   await clearState(id);
-  await showHome(id, account, `Kirdingiz, ${escapeHtml(givenName(account.name))}.\n${accountLine(account)}`);
+  await showHome(id, account, `Kirdingiz, ${escapeHtml(givenName(account.name))}.\n${accountLine(account)}`, {
+    text: "Kirdingiz",
+    tone: "good",
+  });
   if (typeof state?.data.pending === "string") await askWebLogin(id, state.data.pending.slice(2), account);
 }
 
@@ -206,7 +260,43 @@ async function visibleTasks(account: Account, id?: string) {
   });
 }
 
-const PAGE = 8;
+const PAGE = 5;
+
+/** Ro‘yxat rasmi: guruhlar va sarlavha. */
+function listView(account: Account, kind: ListKind, items: Task[], total: number) {
+  const byStatus = (status: Task["status"]) => items.filter((t) => t.status === status);
+  const groups: Record<ListKind, ListGroup[]> = {
+    mine: [
+      { title: "Tekshiruvda", hint: "PM javobini kutmoqda", items: byStatus("in_review") },
+      { title: "Jarayonda", items: byStatus("in_progress") },
+    ],
+    open: [{ title: "Olinmagan", items }],
+    live: [
+      { title: "Tekshiruvda", items: byStatus("in_review") },
+      { title: "Jarayonda", items: byStatus("in_progress") },
+      { title: "Ochiq", hint: "Hali hech kim olmagan", items: byStatus("todo") },
+    ],
+    done: [
+      { title: "Bajarildi", items: byStatus("done") },
+      { title: "Bekor qilingan", items: byStatus("cancelled") },
+    ],
+  };
+  const heads: Record<ListKind, { title: string; dim: string }> = {
+    mine: { title: `Salom, ${givenName(account.name)}.`, dim: `${total} ta vazifa jarayonda.` },
+    open: { title: "Ochiq vazifalar.", dim: "O‘zingizga mosini oling." },
+    live: { title: "Hozirgi vazifalar.", dim: `${total} ta ish ochiq.` },
+    done: { title: "Tugagan vazifalar.", dim: `Jami ${total} ta.` },
+  };
+  const today = todayEyebrow();
+  return {
+    accent: today.date,
+    eyebrow: today.weekday,
+    ...heads[kind],
+    person: account.role === "designer" ? ("creator" as const) : ("assignee" as const),
+    groups: groups[kind],
+    empty: LISTS[kind].empty,
+  };
+}
 
 async function showList(chat: number, account: Account, kind: ListKind, page: number, messageId?: number) {
   const tasks = await visibleTasks(account);
@@ -228,8 +318,8 @@ async function showList(chat: number, account: Account, kind: ListKind, page: nu
   const text = list.length
     ? `<b>${LISTS[kind].title}</b> · ${list.length} ta${pages > 1 ? `\nSahifa ${current + 1}/${pages}` : ""}`
     : LISTS[kind].empty;
-  if (messageId) await edit(chat, messageId, text, rows);
-  else await say(chat, text, inline(rows));
+  const items = list.slice(current * PAGE, (current + 1) * PAGE);
+  await present(chat, messageId, () => taskListImage(listView(account, kind, items, list.length)), text, rows);
 }
 
 async function loadTask(account: Account, id: string) {
@@ -238,8 +328,15 @@ async function loadTask(account: Account, id: string) {
   return task;
 }
 
-async function showTask(chat: number, messageId: number, account: Account, task: Task, back?: ListKind, lead?: string) {
-  await edit(chat, messageId, taskText(task, lead), taskKeyboard(task, account, back));
+async function showTask(chat: number, messageId: number | undefined, account: Account, task: Task, back?: ListKind, lead?: Lead) {
+  await present(
+    chat,
+    messageId,
+    () => taskSheetImage(task, lead),
+    taskCaption(task, lead?.text),
+    taskKeyboard(task, account, back),
+    taskText(task, lead?.text),
+  );
 }
 
 async function sendTaskFiles(chat: number, task: Task) {
@@ -259,58 +356,76 @@ async function sendTaskFiles(chat: number, task: Task) {
 const percent = (part: number, total: number) => (total ? `${Math.round((part / total) * 100)}%` : "—");
 
 async function showStats(chat: number, account: Account, period: Stats["period"], messageId?: number) {
-  const { totals: t } = await getStats(await db(), period, account);
+  const stats = await getStats(await db(), period, account);
+  const t = stats.totals;
   const label = period === "all" ? "Butun davr" : `So‘nggi ${period} kun`;
-  const lines =
+  const facts =
     account.role === "designer"
       ? [
-          `Bajarilgan vazifa: ${t.done}`,
-          `Tayyorlagan dizayn: ${t.images}`,
-          `Vaqtida: ${percent(t.onTime, t.onTime + t.late)}`,
-          `Hozir qo‘lda: ${t.inProgress}`,
+          { label: "Tayyor dizayn", value: String(t.images), tone: "accent" as const },
+          { label: "Bajarilgan vazifa", value: String(t.done) },
+          { label: "Vaqtida", value: percent(t.onTime, t.onTime + t.late) },
         ]
       : [
-          ...(account.role === "pm" ? [`Bergan task: ${t.created}`] : []),
-          `Bajarilgan vazifa: ${t.done}`,
-          `Tayyor dizayn: ${t.images}`,
-          `Jarayonda: ${t.inProgress}`,
-          `Hozir ochiq: ${t.open}`,
+          ...(account.role === "pm" ? [{ label: "Bergan task", value: String(t.created), tone: "accent" as const }] : []),
+          { label: "Bajarilgan vazifa", value: String(t.done) },
+          { label: "Tayyor dizayn", value: String(t.images) },
+          ...(account.role === "pm" ? [] : [{ label: "Hozir ochiq", value: String(t.open) }]),
         ];
+  const lines = facts.map((fact) => `${fact.label}: ${fact.value}`);
   const rows: Keyboard = [
     (["7", "30", "all"] as const).map((p) => action(p === "all" ? "Hammasi" : `${p} kun`, `s:${p}`)),
     ...(account.role === "admin" ? [] : [[action("Tugagan vazifalar", "l:done:0")]]),
     [webApp("Ilovada ko‘rish", "/tg?view=statistika")],
   ];
-  const text = `<b>Statistika</b> · ${label}\n\n${lines.join("\n")}`;
-  if (messageId) await edit(chat, messageId, text, rows);
-  else await say(chat, text, inline(rows));
+  const text = `<b>Statistika</b> · ${label}`;
+  const render = () =>
+    statsImage({
+      eyebrow: label,
+      title: account.role === "designer" ? "Natijalarim." : "Natijalar.",
+      dim: account.role === "designer" ? "Kunma-kun nima qildingiz." : "Kim qancha va qanday ishladi.",
+      facts,
+      daily: stats.daily,
+    });
+  await present(chat, messageId, render, text, rows, `${text}\n\n${lines.join("\n")}`);
 }
 
 async function showTeam(chat: number, account: Account) {
   const members = await getMembers(await db(), account.role === "admin" ? [...memberRoles] : ["designer"]);
-  const lines = members.map((m) => {
+  const people = members.map((m) => {
     const s = m.stats;
-    const state = m.role === "designer" ? `${s.inProgress} jarayonda · ${s.done} bajarildi` : `${s.created} ta vazifa`;
-    return `<b>${escapeHtml(m.name)}</b>\n${account.role === "admin" ? `${roleInfo[m.role].label} · ` : ""}${state}${m.activated ? "" : " · Ro‘yxatdan o‘tmagan"}`;
+    const busy = s.inProgress + s.inReview;
+    const state = m.role === "designer" ? `${s.done} ta bajarildi` : `${s.created} ta vazifa qo‘ydi`;
+    return {
+      name: m.name,
+      line: `${account.role === "admin" ? `${roleInfo[m.role].label} · ` : ""}${state}${m.activated ? "" : " · Ro‘yxatdan o‘tmagan"}`,
+      value: String(m.role === "designer" ? busy : s.created),
+      label: m.role === "designer" ? "hozirgi ishi" : "vazifa",
+    };
   });
-  await say(
+  const title = account.role === "admin" ? "Jamoa." : "Dizaynerlar.";
+  await present(
     chat,
-    lines.length ? lines.join("\n\n") : "Hali hech kim yo‘q.",
-    inline([[webApp(account.role === "admin" ? "Jamoani boshqarish" : "Ilovada ko‘rish", account.role === "admin" ? "/tg" : "/tg?view=dizaynerlar")]]),
+    undefined,
+    () => teamImage({ title, dim: "Kim qancha ish bilan band.", people }),
+    `<b>${title}</b> ${people.length} kishi`,
+    [[webApp(account.role === "admin" ? "Jamoani boshqarish" : "Ilovada ko‘rish", account.role === "admin" ? "/tg" : "/tg?view=dizaynerlar")]],
+    people.map((p) => `<b>${escapeHtml(p.name)}</b>\n${escapeHtml(p.line)}`).join("\n\n") || "Hali hech kim yo‘q.",
   );
 }
 
-async function showAccount(chat: number, user: TelegramUser, account: Account) {
+async function showAccount(chat: number, user: TelegramUser, account: Account, messageId?: number) {
   const token = await createToken("open", { telegram: profile(user), memberId: account.id });
-  await say(
-    chat,
-    `<b>${escapeHtml(account.name)}</b>\n${accountLine(account)}\n\nTelegram shu hisobga ulangan. Bot va ilova o‘zi kiradi.`,
-    inline([
-      [webApp("Ilovani ochish", "/tg")],
-      [link("Brauzerda ochish", browserLink(token))],
-      [action("Chiqish", "out", "danger")],
-    ]),
-  );
+  const muted = await isMuted(user.id);
+  const text = `<b>${escapeHtml(account.name)}</b>\n${accountLine(account)}\n\nTelegram shu hisobga ulangan. Bot va ilova o‘zi kiradi.\n\nMuddat eslatmalari: ${muted ? "o‘chiq" : "yoniq"}.`;
+  const keyboard: Keyboard = [
+    [webApp("Ilovani ochish", "/tg")],
+    [link("Brauzerda ochish", browserLink(token))],
+    [action(muted ? "Eslatmalarni yoqish" : "Eslatmalarni o‘chirish", "mute")],
+    [action("Chiqish", "out", "danger")],
+  ];
+  if (messageId) await edit(chat, messageId, text, keyboard);
+  else await say(chat, text, inline(keyboard));
 }
 
 /* ---- PM: yangi vazifa ------------------------------------------------------ */
@@ -423,7 +538,7 @@ async function wizardCallback(chat: number, user: TelegramUser, account: Account
     if (state.step !== "new:confirm") throw new ApiError(409, "Bu qadam eskirgan.");
     const task = await postTask(account, data);
     await clearState(user.id);
-    await say(chat, taskText(task, "Vazifa ochiq vazifalarga qo‘yildi"), inline(taskKeyboard(task, account)));
+    await showTask(chat, undefined, account, task, undefined, { text: "Vazifa ochiq vazifalarga qo‘yildi", tone: "good" });
   }
 }
 
@@ -498,7 +613,7 @@ async function onMessage(message: Message) {
       const id = String(state.data.id);
       const task = await runTaskAction(account, id, { action: "complete", message: text });
       await clearState(user.id);
-      return await say(chat, taskText(task, "Ish tugatildi"), inline(taskKeyboard(task, account)));
+      return await showTask(chat, undefined, account, task, undefined, { text: "Ish tugatildi", tone: "good" });
     }
     if (state?.step.startsWith("new:") && text) return await wizardText(chat, user, state.step, state.data, text);
     return await showHome(chat, account);
@@ -509,11 +624,6 @@ async function onMessage(message: Message) {
 }
 
 /* ---- Tugmalar -------------------------------------------------------------- */
-async function confirmAsk(chat: number, messageId: number, task: Task, text: string, yes: string, back: string) {
-  await edit(chat, messageId, `<b>${escapeHtml(task.title)}</b>\n\n${text}`, [
-    [action("Ha", yes, "danger"), action("Yo‘q", back)],
-  ]);
-}
 
 async function onCallback(query: Callback) {
   const user = query.from;
@@ -525,11 +635,16 @@ async function onCallback(query: Callback) {
   if (!chat || !messageId || query.message?.chat.type !== "private") return answer();
   const [head, first, second] = data.split(":");
   const account = await memberByTelegram(user.id);
+  // Rasmli xabarda matn emas, rasm ostidagi yozuv o‘zgaradi.
+  const rewrite = (text: string, keyboard?: Keyboard) =>
+    query.message?.photo ? editCaption(chat, messageId, text, keyboard) : edit(chat, messageId, text, keyboard);
+  const confirm = (task: Task, text: string, yes: string, back: string) =>
+    rewrite(`<b>${escapeHtml(task.title)}</b>\n\n${text}`, [[action("Ha", yes, "danger"), action("Yo‘q", back)]]);
   try {
     if (head === "cancel") {
       await clearState(user.id);
       await answer("Bekor qilindi");
-      await edit(chat, messageId, "Bekor qilindi.");
+      await rewrite("Bekor qilindi.");
       return;
     }
     if (head === "login") {
@@ -561,15 +676,13 @@ async function onCallback(query: Callback) {
       case "claim": {
         const task = await runTaskAction(account, first, { action: "claim" });
         await answer("Vazifa sizniki. Omad!");
-        return await showTask(chat, messageId, account, task, undefined, "Vazifa sizda");
+        return await showTask(chat, messageId, account, task, undefined, { text: "Vazifa sizda", tone: "good" });
       }
       case "done": {
         const task = await loadTask(account, first);
         await setState(user.id, "comment", { id: first });
         await answer();
-        return await edit(
-          chat,
-          messageId,
+        return await rewrite(
           `<b>${escapeHtml(task.title)}</b>\n\nIzoh yoki havola bo‘lsa, yozing. Bo‘lmasa, shu tugmani bosing.`,
           [[action("Izohsiz tugatish", `fin:${first}`, "success")], [action("Orqaga", `t:${first}:mine`)]],
         );
@@ -578,32 +691,32 @@ async function onCallback(query: Callback) {
         const task = await runTaskAction(account, first, { action: "complete" });
         await clearState(user.id);
         await answer("Ish tugatildi");
-        return await showTask(chat, messageId, account, task, undefined, "Ish tugatildi");
+        return await showTask(chat, messageId, account, task, undefined, { text: "Ish tugatildi", tone: "good" });
       }
       case "rel": {
         const task = await loadTask(account, first);
         await answer();
-        return await confirmAsk(chat, messageId, task, "Vazifa ochiq ro‘yxatga qaytadi, yuklangan natija o‘chadi.", `rel!:${first}`, `t:${first}:mine`);
+        return await confirm(task, "Vazifa ochiq ro‘yxatga qaytadi, yuklangan natija o‘chadi.", `rel!:${first}`, `t:${first}:mine`);
       }
       case "rel!": {
         const task = await runTaskAction(account, first, { action: "release" });
         await answer("Vazifa bo‘shatildi");
-        return await showTask(chat, messageId, account, task, undefined, "Vazifa ochiq ro‘yxatga qaytdi");
+        return await showTask(chat, messageId, account, task, undefined, { text: "Vazifa ochiq ro‘yxatga qaytdi", tone: "warn" });
       }
       case "can": {
         const task = await loadTask(account, first);
         await answer();
-        return await confirmAsk(chat, messageId, task, "Vazifa bekor qilinsinmi?", `can!:${first}`, `t:${first}:live`);
+        return await confirm(task, "Vazifa bekor qilinsinmi?", `can!:${first}`, `t:${first}:live`);
       }
       case "can!": {
         const task = await runTaskAction(account, first, { action: "cancel" });
         await answer("Vazifa bekor qilindi");
-        return await showTask(chat, messageId, account, task, undefined, "Vazifa bekor qilindi");
+        return await showTask(chat, messageId, account, task, undefined, { text: "Vazifa bekor qilindi", tone: "bad" });
       }
       case "re": {
         const task = await runTaskAction(account, first, { action: "reopen" });
         await answer("Vazifa qayta ochildi");
-        return await showTask(chat, messageId, account, task, undefined, "Vazifa qayta ochildi");
+        return await showTask(chat, messageId, account, task, undefined, { text: "Vazifa qayta ochildi", tone: "accent" });
       }
       case "n":
         await answer();
@@ -617,6 +730,12 @@ async function onCallback(query: Callback) {
         await spendToken(second, "denied");
         await answer("Rad etildi");
         return await edit(chat, messageId, "Kirish rad etildi.");
+      }
+      case "mute": {
+        const muted = !(await isMuted(user.id));
+        await setMuted(user.id, muted);
+        await answer(muted ? "Eslatmalar o‘chirildi" : "Eslatmalar yoqildi");
+        return await showAccount(chat, user, account, messageId);
       }
       case "out":
         await answer();

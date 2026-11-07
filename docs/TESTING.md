@@ -42,10 +42,12 @@ Sign-in and registration share a limiter (10 attempts per login, 40 per IP in 15
 
 ```sh
 BOT_TOKEN=test-token TELEGRAM_API_URL=http://127.0.0.1:4055 TURSO_DATABASE_URL=file:/tmp/fazo-test.db npm run dev
-npm run test:telegram
+TEST_DB=/tmp/fazo-test.db npm run test:telegram
 ```
 
-It covers every sign-in path (in-chat login and password, web-app, one-time browser link, connecting from the site, Telegram login on the site), forged and expired `initData`, single-use links, task notifications, bot buttons, the PM task wizard, file delivery and access rules, and sign-out. A real device still has to be checked once after deployment: the Mini App opening, the menu button and `openLink`.
+`TEST_DB` lets the reminder checks move times in the database; without it they are skipped, and they are also skipped at night (Tashkent). Image messages are checked by what the fake API receives, so look at the pictures themselves after changing `src/lib/telegram/images.tsx`.
+
+It covers every sign-in path (in-chat login and password, web-app, one-time browser link, connecting from the site, Telegram login on the site), forged and expired `initData`, single-use links, task notifications, bot buttons, the PM task wizard, image messages opening in place, reminders with their single delivery and muting, file delivery and access rules, and sign-out. A real device still has to be checked once after deployment: the Mini App opening, the menu button and `openLink`.
 
 Remote fixture execution requires `TEST_ALLOW_REMOTE=1`. Set it only for the intended deployment.
 

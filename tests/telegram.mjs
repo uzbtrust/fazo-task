@@ -1,11 +1,13 @@
 import assert from "node:assert/strict";
 import { createHash, createHmac, randomBytes } from "node:crypto";
 import { createServer } from "node:http";
+import { DatabaseSync } from "node:sqlite";
 
 /*
  * Bot va Telegram orqali kirish oqimlari. Haqiqiy Telegram ishlatilmaydi: test o‘zining soxta serverini ochadi.
  * Ilovani shunday ishga tushiring (bir martalik baza bilan):
  *   BOT_TOKEN=test-token TELEGRAM_API_URL=http://127.0.0.1:4055 TURSO_DATABASE_URL=file:/tmp/test.db npm run dev
+ * Eslatmalar bo‘limi vaqtni bazada suradi: TEST_DB=/tmp/test.db bilan ishga tushiring.
  */
 const base = new URL(process.env.BASE_URL || "http://127.0.0.1:3000");
 if (!["localhost", "127.0.0.1", "[::1]"].includes(base.hostname)) throw new Error("Faqat lokal server bilan ishlaydi.");
@@ -26,20 +28,32 @@ let messageId = 1000;
 const mock = createServer((request, response) => {
   const chunks = [];
   request.on("data", (chunk) => chunks.push(chunk));
-  request.on("end", () => {
+  request.on("end", async () => {
     const [, bot, method] = /^\/bot([^/]+)\/(\w+)/.exec(request.url) || [];
     assert.equal(bot, TOKEN, "Ilova test tokeni bilan ishlashi kerak");
     const raw = Buffer.concat(chunks);
-    const json = (request.headers["content-type"] || "").includes("json");
-    calls.push({ method, params: json ? JSON.parse(raw.toString()) : { raw: raw.length } });
-    const result = method === "getMe" ? { id: 1, username: "fazo_test_bot" } : { message_id: ++messageId };
+    const type = request.headers["content-type"] || "";
+    let params = {};
+    if (type.includes("json")) params = JSON.parse(raw.toString());
+    else {
+      for (const [key, value] of await new Response(raw, { headers: { "Content-Type": type } }).formData())
+        params[key] = typeof value === "string" ? value : { file: value.name, size: value.size, head: Buffer.from(await value.arrayBuffer()).subarray(1, 4).toString() };
+      if (typeof params.reply_markup === "string") params.reply_markup = JSON.parse(params.reply_markup);
+      if (params.media) params.caption = JSON.parse(params.media).caption;
+    }
+    calls.push({ method, params });
+    const photo = method === "sendPhoto" ? { photo: [{ file_id: "small" }, { file_id: "uploaded-image" }] } : {};
+    const result = method === "getMe" ? { id: 1, username: "fazo_test_bot" } : { message_id: ++messageId, ...photo };
     response.setHeader("Content-Type", "application/json");
     response.end(JSON.stringify({ ok: true, result }));
   });
 });
 
+const VISIBLE = ["sendMessage", "editMessageText", "sendPhoto", "editMessageMedia", "editMessageCaption"];
 const texts = (chat) =>
-  calls.filter((c) => ["sendMessage", "editMessageText"].includes(c.method) && c.params.chat_id == chat).map((c) => c.params);
+  calls
+    .filter((c) => VISIBLE.includes(c.method) && c.params.chat_id == chat)
+    .map((c) => ({ ...c.params, method: c.method, text: c.params.text || c.params.caption || "" }));
 const last = (chat) => texts(chat).at(-1);
 const buttons = (params) => (params?.reply_markup?.inline_keyboard || []).flat();
 async function until(check, label) {
@@ -92,13 +106,13 @@ async function webhook(update, headerSecret = secret) {
 const person = (id, first_name) => ({ id, first_name, username: `u${id}` });
 const say = (user, text, type = "private") =>
   webhook({ message: { message_id: ++messageId, text, from: user, chat: { id: user.id, type } } });
-const press = (user, data) =>
+const press = (user, data, photo = false) =>
   webhook({
     callback_query: {
       id: String(++messageId),
       data,
       from: user,
-      message: { message_id: ++messageId, chat: { id: user.id, type: "private" } },
+      message: { message_id: ++messageId, chat: { id: user.id, type: "private" }, ...(photo ? { photo: [{}] } : {}) },
     },
   });
 function initData(user, { age = 0, tamper = false, signature = false } = {}) {
@@ -255,7 +269,11 @@ async function main() {
   assert.equal(posted.status, 201);
   const task = posted.data.task;
   const card = await until(() => texts(tgB.id).find((x) => /Yangi vazifa/.test(x.text)), "yangi vazifa xabari");
-  ok(card.text.includes("&lt;karusel&gt;") && card.text.includes("Matn &amp; rang"), "Matn HTML'dan himoyalangan");
+  ok(card.text.includes("&lt;karusel&gt;"), "Matn HTML'dan himoyalangan");
+  ok(card.method === "sendPhoto", "Yangi vazifa rasm bilan keladi");
+  const uploads = calls.filter((x) => x.method === "sendPhoto");
+  ok(uploads.filter((x) => x.params.photo?.head === "PNG").length === 1, "Rasm bir marta yuklanadi");
+  ok(uploads.slice(1).every((x) => x.params.photo === "uploaded-image"), "Qolganlarga Telegram'dagi nusxa ketadi");
   ok(card.text.includes("18:00"), "Muddat soati ko‘rinadi");
   ok(texts(tgD.id).length || (await until(() => texts(tgD.id).length, "D ham xabar oladi")), "Hamma dizaynerga boradi");
   ok(!texts(tgPm.id).some((x) => /Yangi vazifa/.test(x.text)), "Qo‘ygan PMga yuborilmaydi");
@@ -267,8 +285,15 @@ async function main() {
   ok(calls.find((x) => x.method === "answerCallbackQuery")?.params.show_alert, "Ikkinchi dizaynerga rad javobi");
   ok(/boshqa dizayner/.test(calls.find((x) => x.method === "answerCallbackQuery").params.text), "Sababi aytiladi");
   await say(tgB, "Mening vazifalarim");
+  ok(last(tgB.id).method === "sendPhoto", "Ro‘yxat rasm bilan keladi");
   ok(buttons(last(tgB.id)).length === 1, "Ro‘yxatda vazifa bor");
-  await press(tgB, `done:${task.id}`);
+  await press(tgB, buttons(last(tgB.id))[0].callback_data);
+  ok(last(tgB.id).method === "editMessageMedia", "Tugma bosilganda vazifa oynasi joyida ochiladi");
+  ok(buttons(last(tgB.id)).some((x) => x.callback_data === "l:mine:0"), "Oynada orqaga tugmasi bor");
+  await press(tgB, "l:mine:0");
+  ok(last(tgB.id).method === "editMessageMedia", "Orqaga bosilganda ro‘yxat joyida qaytadi");
+  await press(tgB, `done:${task.id}`, true);
+  ok(last(tgB.id).method === "editMessageCaption", "Rasmli xabarda savol rasm ostida chiqadi");
   await say(tgB, "https://figma.example/ish");
   ok(/Ish tugatildi/.test(last(tgB.id).text), "Izoh bilan tugatildi");
   await until(() => texts(tgPm.id).find((x) => /ishni tugatdi/.test(x.text)), "PM tugaganini biladi");
@@ -327,7 +352,58 @@ async function main() {
   ok((await fresh("/api/me")).data.user.username === b.username, "To‘g‘ri hisob");
   ok((await client()("/api/auth/telegram/link", { method: "POST", body: { token: openToken } })).status === 410, "Kirish havolasi bir marta ishlaydi");
 
-  // 11. Parol o‘zgarsa va chiqilsa
+  // 11. Eslatmalar: vaqtni bazada surib tekshiriladi
+  if (process.env.TEST_DB) {
+    const database = new DatabaseSync(process.env.TEST_DB);
+    const tashkent = (ms) => new Date(ms + 5 * 36e5).toISOString();
+    const hour = Number(tashkent(Date.now()).slice(11, 13));
+    const sweep = async () => {
+      database.exec("DELETE FROM telegram_reminders WHERE key='sweep'");
+      return (await client()("/api/telegram/cron")).data;
+    };
+    const skip = (await client()("/api/telegram/cron")).data;
+    ok(typeof skip.sent === "number", "Tekshiruv manzili ishlaydi");
+    if (hour >= 9 && hour < 21) {
+      const soon = tashkent(Date.now() + 2 * 36e5);
+      const made = await pm.web("/api/tasks", {
+        method: "POST",
+        body: { title: `${runId} tez`, brief: "Eslatma sinovi", imageCount: 1, dueDate: soon.slice(0, 10), dueTime: soon.slice(11, 16) },
+      });
+      const id = made.data.task.id;
+      await press(tgB, `claim:${id}`);
+      await sweep();
+      calls = [];
+      await sweep();
+      ok(!calls.some((x) => /soat qoldi/.test(x.params.caption || "")), "Yangi olingan vazifa darhol eslatilmaydi");
+      database.prepare("UPDATE assignments SET claimed_at=? WHERE id=?").run(new Date(Date.now() - 2 * 36e5).toISOString(), id);
+      calls = [];
+      await sweep();
+      await until(() => texts(tgB.id).find((x) => /soat qoldi/.test(x.text) && x.text.includes("tez")), "muddat yaqin eslatmasi");
+      ok(buttons(texts(tgB.id).find((x) => /soat qoldi/.test(x.text))).some((x) => x.text === "Tugatdim"), "Eslatmada amal tugmasi bor");
+      calls = [];
+      await sweep();
+      ok(!texts(tgB.id).some((x) => /soat qoldi/.test(x.text)), "Eslatma ikki marta kelmaydi");
+      const yesterday = tashkent(Date.now() - 864e5).slice(0, 10);
+      database.prepare("UPDATE assignments SET due_date=?,due_time=NULL WHERE id=?").run(yesterday, id);
+      calls = [];
+      await sweep();
+      await until(() => texts(tgB.id).find((x) => /Muddat o‘tdi/.test(x.text)), "muddat o‘tdi: dizaynerga");
+      await until(() => texts(tgPm.id).find((x) => /Muddat o‘tdi/.test(x.text)), "muddat o‘tdi: PMga");
+      await say(tgB, "Hisob");
+      await press(tgB, "mute");
+      ok(/o‘chiq/.test(last(tgB.id).text), "Eslatmalarni o‘chirish");
+      database.prepare("UPDATE assignments SET due_date=?,due_time=NULL WHERE id=?").run(tashkent(Date.now() - 2 * 864e5).slice(0, 10), id);
+      calls = [];
+      await sweep();
+      ok(!texts(tgB.id).length, "O‘chirgan odamga eslatma bormaydi");
+      await press(tgB, "mute");
+      const digest = texts(tgPm.id).find((x) => /Xayrli tong/.test(x.text));
+      console.log(digest ? "  ertalabki xulosa shu tekshiruvda yuborildi" : "  ertalabki xulosa avvalroq yuborilgan");
+    } else console.log("  eslatmalar: tun vaqti, sinov o‘tkazib yuborildi");
+    database.close();
+  }
+
+  // 12. Parol o‘zgarsa va chiqilsa
   const newPassword = `${password}x`;
   ok((await a.web("/api/me", { method: "PATCH", body: { currentPassword: password, newPassword } })).status === 200, "Parol almashdi");
   ok(/Parolingiz o‘zgardi/.test(last(tgA.id).text), "Botga aytildi");

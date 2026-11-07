@@ -41,7 +41,8 @@ Muallif belgisi: pastda `Signature` («Dizayn: Abdurakhmonov»). Ilovaning o‘z
   - dizaynerlar jadvalida rasmlar soni bitta rangli gorizontal ustun bilan;
   - telefonda jadval kartalarga aylanadi.
 - **Dialoglar:** markazda varaq, telefonda pastdan chiqadi.
-- **Telegram:** web-app xuddi shu ilovaning o‘zi (`/tg` orqali kiradi) va Telegram mavzusiga ergashadi. Bot xabarlarida emoji yo‘q: oddiy matn, qalin sarlavha, `★` muhimlik uchun.
+- **Telegram:** web-app xuddi shu ilovaning o‘zi (`/tg` orqali kiradi) va Telegram mavzusiga ergashadi.
+- **Bot rasmlari:** vazifa, ro‘yxat, statistika va jamoa macOS oynasi ichida chiziladi: chapda qizil, sariq, yashil tugmalar, o‘rtada Fazo Task, ostida imzo. Ichi doim qorong‘u mavzuda, foni `#f5f5f7`. Ranglar `src/lib/telegram/images.tsx` boshida tizim tokenlaridan ko‘chirilgan, chunki rasmda CSS o‘zgaruvchisi ishlamaydi: tizim ranglari o‘zgarsa, u yer ham yangilanadi. Yuqoridagi rangli belgi xabar sababini aytadi: ko‘k — yangilik, sariq — vaqt, qizil — kechikish, yashil — bajarildi. Xabarlarda emoji yo‘q.
 
 ## Harakat
 
