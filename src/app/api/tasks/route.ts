@@ -24,7 +24,7 @@ export async function POST(request: Request) {
     const references = fileIds(body.referenceIds);
     const links = linkUrls(body.links);
     if (!fields.brief && !files.length)
-      throw new ApiError(400, "TZ ni matn bilan yozing yoki fayl yuklang.");
+      throw new ApiError(400, "Taskni matn bilan yozing yoki fayl yuklang.");
     const database = await db();
     const id = randomUUID();
     const now = new Date().toISOString();
@@ -32,8 +32,8 @@ export async function POST(request: Request) {
     try {
       // Vazifa hech kimga biriktirilmaydi: ochiq vazifalar ro‘yxatiga tushadi.
       await tx.execute({
-        sql: `INSERT INTO assignments(id,title,brief,image_count,priority,due_date,status,created_by,created_at,updated_at)
-          VALUES (?,?,?,?,?,?,'todo',?,?,?)`,
+        sql: `INSERT INTO assignments(id,title,brief,image_count,priority,due_date,due_time,status,created_by,created_at,updated_at)
+          VALUES (?,?,?,?,?,?,?,'todo',?,?,?)`,
         args: [
           id,
           fields.title,
@@ -41,6 +41,7 @@ export async function POST(request: Request) {
           fields.imageCount,
           fields.priority,
           fields.dueDate,
+          fields.dueTime,
           user.id,
           now,
           now,

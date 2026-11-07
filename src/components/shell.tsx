@@ -13,7 +13,7 @@ import {
 import { CircleAlert, CircleCheck, KeyRound, LogOut, Moon, Sun } from "lucide-react";
 import type { Account } from "@/lib/types";
 import { roleInfo } from "@/lib/roles";
-import { api, Avatar, ErrorMessage, Modal, Segmented, Spinner, Wordmark } from "./ui";
+import { api, Avatar, ErrorMessage, Modal, Segmented, Signature, Spinner, Wordmark } from "./ui";
 
 type Toast = { message: string; tone?: "error" };
 const ToastContext = createContext<(toast: Toast | string) => void>(() => {});
@@ -217,6 +217,7 @@ export function Shell<V extends string>({
           <span>Fazo Task</span>
           <span aria-hidden="true">·</span>
           <span>Jamoa ishlari bir joyda.</span>
+          <Signature />
         </footer>
         {passwordOpen && (
           <PasswordDialog

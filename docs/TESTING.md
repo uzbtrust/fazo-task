@@ -13,8 +13,8 @@ The suite creates one QA project manager, two QA designers and two tasks. It fol
 - **Access control:** anonymous requests return `401`; retired endpoints return `404`; cross-site mutations return `403`. The administrator has no task access, a PM has no statistics access, and a designer cannot read the roster or create tasks.
 - **Accounts:** the administrator creates members with a login only. Creating another administrator, an invalid login or a duplicate login is rejected.
 - **Registration:** signing in before registering explains the next step (`409`). Registration shows the member's name, rejects short passwords, sets the password and opens a session; a second registration is rejected.
-- **Task validation:** title, TZ (text or file) and image count are required; priority is 1–5 stars; impossible dates are rejected; a TZ file links to one task only.
-- **Open pool:** new tasks have no assignee. Every designer sees them and can read the TZ file. Two designers claiming at once — exactly one gets `200`, the other `409`. The task then disappears from the other designer's list, and its files become private.
+- **Task validation:** title, task text or file and image count are required; priority is 1–5 stars; impossible dates and hours are rejected; a deadline keeps its hour; a task file links to one task only.
+- **Open pool:** new tasks have no assignee. Every designer sees them and can read the task file. Two designers claiming at once — exactly one gets `200`, the other `409`. The task then disappears from the other designer's list, and its files become private.
 - **Sessions and entry:** the session cookie lives about 180 days. A signed-out visit to `/` redirects to `/login`; a signed-in visit to `/login` redirects to `/`. The PM's first HTML already contains the task list.
 - **Workflow (`REVIEW_STEP = false`):**
   - Result upload is optional and only possible while the task is in progress.
@@ -41,7 +41,8 @@ Remote fixture execution requires `TEST_ALLOW_REMOTE=1`. Set it only for the int
 Browser verification should cover each role's panel at 375 px, 768 px and 1440 px in light and dark themes:
 
 - registration;
-- task creation with a TZ file;
+- task creation with a task file and a deadline hour;
+- the designer panel: «Mening vazifalarim» appears only with an active task and opens first; finished tasks are under Statistika;
 - claiming from the open pool;
 - uploading and submitting results;
 - returning and accepting;

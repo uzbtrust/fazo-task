@@ -1,6 +1,6 @@
 # Fazo Task
 
-Dizayn jamoasi uchun o‘zbekcha vazifa paneli. Har bir rolning o‘z paneli bor. Dizayn asosi: [mankiw-chapters](https://github.com/uzbtrust/mankiw-chapters).
+Dizayn jamoasi uchun o‘zbekcha vazifa paneli. Har bir rolning o‘z paneli bor. Dizayn: [uzbtrust design system](https://github.com/uzbtrust/design-system).
 
 ## Rollar
 
@@ -22,8 +22,8 @@ Login berilgandan to hodim ro‘yxatdan o‘tguncha o‘sha loginni bilgan istal
 
 **Ochiq → Jarayonda → Bajarildi** (PM xohlasa istalgan bosqichda **Bekor qilingan**)
 
-- PM vazifani qo‘yadi. Majburiy maydonlar: **nom**, **TZ** (matn yoki fayl, kamida bittasi) va **nechta rasm kerakligi**. Ixtiyoriy: **referenslar** (namuna rasmlar moodboard ko‘rinishida va Pinterest/Behance/Dribbble kabi havolalar), **muddat** (kalendardan tanlanadi) va **1–5 yulduz muhimlik**. Vazifa hech kimga biriktirilmaydi.
-- Vazifa **«Ochiq vazifalar»**da turadi. Dizaynerlar TZ ni ochib ko‘radi va **«Men olaman»**ni bosadi. Ikki dizayner bir vaqtda bossa, faqat bittasi oladi.
+- PM vazifani qo‘yadi. Majburiy maydonlar: **nom**, **task** (matn yoki fayl, kamida bittasi) va **nechta rasm kerakligi**. Ixtiyoriy: **referenslar** (namuna rasmlar moodboard ko‘rinishida va Pinterest/Behance/Dribbble kabi havolalar), **muddat** (kalendardan sana va soat; soatsiz bo‘lsa — kun oxirigacha) va **1–5 yulduz muhimlik**. Vazifa hech kimga biriktirilmaydi.
+- Vazifa **«Ochiq vazifalar»**da turadi. Dizaynerlar taskni ochib ko‘radi va **«Men olaman»**ni bosadi. Ikki dizayner bir vaqtda bossa, faqat bittasi oladi.
 - Dizayner ishni PMga **og‘zaki** ko‘rsatadi. Kelishilgach, o‘zi **«Tugatdim»** deb belgilaydi, xohlasa izoh yoki havola qoldiradi. Rasm yuklash hozircha ixtiyoriy.
 - Dizayner vazifani **bo‘shatishi** mumkin, PM esa uni **ochiq ro‘yxatga qaytarishi** mumkin. Bunda yuklangan rasmlar o‘chadi.
 - PM istalgan paytda vazifani **tahrirlaydi**, bajarilganini ham. Tugamagan vazifani sabab yozib **bekor qiladi**: dizayner uni «Bekor qilingan» guruhida ko‘radi. Bekor qilingan vazifani **qayta ochish** mumkin — u yana ochiq ro‘yxatga chiqadi. **O‘chirish** esa vazifani tarixi va fayllari bilan butunlay olib tashlaydi.
@@ -33,15 +33,15 @@ Login berilgandan to hodim ro‘yxatdan o‘tguncha o‘sha loginni bilgan istal
 ## Kirish va tezlik
 
 - **Login saqlanadi.** Sessiya 180 kun amal qiladi va har kirganda uzayadi. Saytni yopib qayta ochsangiz, o‘sha hisob ochiladi; faqat «Chiqish» bosilganda yoki parol tiklanganda sessiya tugaydi. Kirgan foydalanuvchi `/login` ga kirsa, darhol o‘z paneliga o‘tadi.
-- **Bir zumda ochiladi.** Sahifa serverda tayyorlanadi: vazifalar ro‘yxati va TZ matnlari birinchi HTML bilan keladi, brauzer qo‘shimcha so‘rov kutmaydi. Bazaga sovuq ulanish va har bir ro‘yxat bitta tarmoq so‘rovida o‘qiladi.
-- **Og‘ir narsalar fonda.** TZ fayllari va rasmlar sahifa ko‘ringandan keyin, brauzer bo‘sh paytida birma-bir yuklanadi (eng ko‘pi 40 ta) va keshga tushadi. Kursor vazifa ustiga kelishi bilan uning fayllari darhol yuklana boshlaydi. Admin statistikasi ham fonda tayyorlanadi.
+- **Bir zumda ochiladi.** Sahifa serverda tayyorlanadi: vazifalar ro‘yxati va task matnlari birinchi HTML bilan keladi, brauzer qo‘shimcha so‘rov kutmaydi. Bazaga sovuq ulanish va har bir ro‘yxat bitta tarmoq so‘rovida o‘qiladi.
+- **Og‘ir narsalar fonda.** Task fayllari va rasmlar sahifa ko‘ringandan keyin, brauzer bo‘sh paytida birma-bir yuklanadi (eng ko‘pi 40 ta) va keshga tushadi. Kursor vazifa ustiga kelishi bilan uning fayllari darhol yuklana boshlaydi. Admin statistikasi ham fonda tayyorlanadi.
 
 ## Statistika
 
 Har bir rolda «Statistika» bo‘limi bor; davr — 7 kun, 30 kun yoki hammasi (grafikda so‘nggi 90 kun):
 
 - **Dizayner** — o‘z natijalari: tayyorlagan dizaynlari, bajargan vazifalari, muddatga rioya va kunlik dizaynlar grafigi.
-- **Project manager** — o‘zi bergan TZ lar soni, ular bo‘yicha tayyor dizaynlar, kunlik grafik va kim qancha qilgani.
+- **Project manager** — o‘zi bergan tasklar soni, ular bo‘yicha tayyor dizaynlar, kunlik grafik va kim qancha qilgani.
 - **Administrator** — butun jamoa: kunlik grafik, har bir dizayner bo‘yicha jadval (dizaynlar, vazifalar, vaqtida %, o‘rtacha vaqt, hozirgi ishi; qatorni bosganda — uning kunlik grafigi) va PMlar jadvali.
 
 Yangi hodim qo‘shilsa, u jadvallarda avtomatik paydo bo‘ladi. Bekor qilingan vazifalar statistikaga kirmaydi.
@@ -95,7 +95,7 @@ Server funksiyalari Mumbayda (`bom1`, `vercel.json`) ishlaydi — Turso bazasi b
 Avvalgi versiyalardan qolgan `users`, `tasks`, `employees`, `team_tasks` va boshqa jadvallarga tegilmaydi. Ulardan faqat administrator hisobi bir marta `members` ga ko‘chiriladi.
 
 **Fayllarga kirish huquqi:**
-- TZ fayllari PM va dizaynerlarga ko‘rinadi. Vazifa olingach, uni faqat olgan dizayner ko‘radi.
+- Task fayllari PM va dizaynerlarga ko‘rinadi. Vazifa olingach, uni faqat olgan dizayner ko‘radi.
 - Natija rasmlari faqat PM va shu vazifa dizayneriga ko‘rinadi.
 - SVG brauzerda ochilmaydi, faqat yuklab olinadi.
 

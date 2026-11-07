@@ -1,13 +1,22 @@
 "use client";
 import { useCallback, useEffect, useState, type CSSProperties } from "react";
-import { BarChart3, ChevronDown } from "lucide-react";
-import type { DailyPoint, Role, Stats, StatsRow } from "@/lib/types";
+import { BarChart3, ChevronDown, Search, UserRound, X } from "lucide-react";
+import type { DailyPoint, Member, Role, Stats, StatsRow, Task } from "@/lib/types";
 import { REVIEW_STEP } from "@/lib/workflow";
 import { api, Avatar, longDate, Segmented, shortDate, Spinner } from "./ui";
-import { Empty, Facts, PageHead, rise } from "./page-parts";
+import { Empty, Facts, PageHead } from "./page-parts";
 import { usePolling, useToast } from "./shell";
+import { TaskGroups } from "./task-list";
 
 type Period = Stats["period"];
+
+/** Ish stolidan olingan tugagan vazifalar: statistikaning oxirida ko‘rsatiladi. */
+export interface Archive {
+  tasks: Task[];
+  person: "assignee" | "creator";
+  onOpen: (task: Task) => void;
+  designers?: Member[];
+}
 
 const cache = new Map<Period, Promise<Stats>>();
 /** Statistikani oldindan so‘rab qo‘yadi; StatsView shu natijadan boshlaydi. */
@@ -36,7 +45,7 @@ const heads: Record<Role, { title: string; dim: string; lead: string }> = {
   },
   pm: {
     title: "Natijalar.",
-    dim: "Bergan TZ va tayyor dizaynlar.",
+    dim: "Bergan task va tayyor dizaynlar.",
     lead: "Siz qo‘ygan vazifalar bo‘yicha: nechtasi bajarildi, nechta dizayn tayyor bo‘ldi va kim qancha qildi.",
   },
   designer: {
@@ -46,7 +55,7 @@ const heads: Record<Role, { title: string; dim: string; lead: string }> = {
   },
 };
 
-export function StatsView({ role }: { role: Role }) {
+export function StatsView({ role, archive }: { role: Role; archive?: Archive }) {
   const notify = useToast();
   const [period, setPeriod] = useState<Period>("30");
   const [stats, setStats] = useState<Stats | null>(null);
@@ -102,7 +111,7 @@ export function StatsView({ role }: { role: Role }) {
             items={
               role === "pm"
                 ? [
-                    { key: "created", label: "Bergan TZ", value: t.created, tone: "accent" as const },
+                    { key: "created", label: "Bergan task", value: t.created, tone: "accent" as const },
                     { key: "done", label: "Bajarilgan vazifa", value: t.done },
                     { key: "images", label: "Tayyor dizayn", value: t.images },
                     { key: "progress", label: "Jarayonda", value: t.inProgress },
@@ -123,7 +132,7 @@ export function StatsView({ role }: { role: Role }) {
                     ]
             }
           />
-          <section className="stats-section rise" style={rise(4)} aria-label="Kunlik dizaynlar">
+          <section className="stats-section" aria-label="Kunlik dizaynlar">
             <DailyChart
               points={stats.daily}
               title={role === "designer" ? "Kunlik dizaynlaringiz" : role === "pm" ? "Vazifalaringiz bo‘yicha kunlik dizaynlar" : "Jamoaning kunlik dizaynlari"}
@@ -134,7 +143,7 @@ export function StatsView({ role }: { role: Role }) {
           </section>
           {role !== "designer" &&
             (stats.designers.length ? (
-              <section className="stats-section rise" style={rise(5)} aria-label="Dizaynerlar natijasi">
+              <section className="stats-section" aria-label="Dizaynerlar natijasi">
                 <div className="role-head">
                   <h2 className="group-head">
                     Dizaynerlar
@@ -146,14 +155,13 @@ export function StatsView({ role }: { role: Role }) {
               </section>
             ) : (
               <Empty
-                index={5}
                 icon={<BarChart3 size={26} strokeWidth={1.6} />}
                 title="Hali natija yo‘q."
                 text="Birinchi vazifa bajarilganda kim qancha qilgani shu yerda ko‘rinadi."
               />
             ))}
           {role === "admin" && stats.managers.length > 0 && (
-            <section className="stats-section rise" style={rise(6)} aria-label="Project managerlar natijasi">
+            <section className="stats-section" aria-label="Project managerlar natijasi">
               <div className="role-head">
                 <h2 className="group-head">
                   Project managerlar
@@ -164,7 +172,7 @@ export function StatsView({ role }: { role: Role }) {
               <div className="stats-table" role="table" aria-label="Project managerlar">
                 <div className="stats-head is-pm" role="row">
                   <span role="columnheader">Project manager</span>
-                  <span role="columnheader">Bergan TZ</span>
+                  <span role="columnheader">Bergan task</span>
                   <span role="columnheader">Bajarilgan</span>
                 </div>
                 {stats.managers.map((row) => (
@@ -173,20 +181,90 @@ export function StatsView({ role }: { role: Role }) {
                       <Avatar name={row.name} size="sm" />
                       <strong>{row.name}</strong>
                     </span>
-                    <span className="stats-num" role="cell" data-label="Bergan TZ">{row.created}</span>
+                    <span className="stats-num" role="cell" data-label="Bergan task">{row.created}</span>
                     <span className="stats-num" role="cell" data-label="Bajarilgan">{row.accepted}</span>
                   </div>
                 ))}
               </div>
             </section>
           )}
+          {archive && <TaskArchive archive={archive} period={period} />}
           <p className="stats-note">
-            «Vaqtida» — ish muddat kuni tugaguncha (Toshkent vaqti) tugatilgan. Muddatsiz va bekor qilingan
-            vazifalar bu foizga kirmaydi. Grafikda «Hammasi» so‘nggi 90 kunni ko‘rsatadi.
+            «Vaqtida» — ish belgilangan soatgacha, soat bo‘lmasa muddat kuni tugaguncha (Toshkent vaqti) tugatilgan.
+            Muddatsiz va bekor qilingan vazifalar bu foizga kirmaydi. Grafikda «Hammasi» so‘nggi 90 kunni ko‘rsatadi.
           </p>
         </>
       )}
     </>
+  );
+}
+
+/** Tugagan vazifalar: davr tepadagi raqamlar bilan bir xil, yangilari yuqorida. */
+function TaskArchive({ archive, period }: { archive: Archive; period: Period }) {
+  const [query, setQuery] = useState("");
+  const [whoChoice, setWho] = useState("all");
+  const { designers = [] } = archive;
+  const who = designers.some((d) => d.id === whoChoice) ? whoChoice : "all";
+  const finishedAt = (t: Task) => t.completedAt || t.updatedAt;
+  const since = period === "all" ? "" : new Date(Date.now() - Number(period) * 864e5).toISOString();
+  const inPeriod = archive.tasks.filter((t) => finishedAt(t) >= since);
+  const needle = query.trim().toLowerCase();
+  const visible = inPeriod
+    .filter(
+      (t) =>
+        (who === "all" || t.assigneeId === who) &&
+        (!needle || `${t.title} ${t.brief} ${t.assigneeName || ""}`.toLowerCase().includes(needle)),
+    )
+    .sort((a, b) => finishedAt(b).localeCompare(finishedAt(a)));
+  if (!inPeriod.length) return null;
+  return (
+    <section className="stats-section" aria-label="Tugagan vazifalar">
+      <div className="archive-head">
+        <h2 className="group-head">Tugagan vazifalar</h2>
+        <div className="archive-tools">
+          {designers.length > 1 && (
+            <label className="pill-field select-pill">
+              <UserRound size={15} strokeWidth={1.8} aria-hidden="true" />
+              <span className="sr-only">Dizayner bo‘yicha saralash</span>
+              <select value={who} onChange={(e) => setWho(e.target.value)}>
+                <option value="all">Barcha dizaynerlar</option>
+                {designers.map((d) => (
+                  <option key={d.id} value={d.id}>
+                    {d.name}
+                  </option>
+                ))}
+              </select>
+              <ChevronDown size={14} strokeWidth={2} aria-hidden="true" />
+            </label>
+          )}
+          <label className="pill-field search-pill">
+            <Search size={15} strokeWidth={1.8} aria-hidden="true" />
+            <span className="sr-only">Vazifalarni qidirish</span>
+            <input type="search" placeholder="Qidirish" value={query} onChange={(e) => setQuery(e.target.value)} />
+            {query && (
+              <button type="button" className="pill-clear" aria-label="Qidiruvni tozalash" onClick={() => setQuery("")}>
+                <X size={13} strokeWidth={2.4} />
+              </button>
+            )}
+          </label>
+        </div>
+      </div>
+      {visible.length ? (
+        <TaskGroups
+          onOpen={archive.onOpen}
+          person={archive.person}
+          groups={[
+            { key: "done", title: "Bajarildi", items: visible.filter((t) => t.status === "done") },
+            { key: "cancelled", title: "Bekor qilingan", items: visible.filter((t) => t.status === "cancelled") },
+          ]}
+        />
+      ) : (
+        <div className="empty empty-quiet">
+          <h2>Mos vazifa topilmadi.</h2>
+          <p>Boshqa so‘z bilan qidiring yoki saralashni bekor qiling.</p>
+        </div>
+      )}
+    </section>
   );
 }
 

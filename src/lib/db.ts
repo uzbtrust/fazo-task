@@ -53,7 +53,7 @@ async function initialize(): Promise<Client> {
       `CREATE TABLE IF NOT EXISTS assignments (
       number INTEGER PRIMARY KEY AUTOINCREMENT, id TEXT NOT NULL UNIQUE, title TEXT NOT NULL,
       brief TEXT NOT NULL DEFAULT '', image_count INTEGER NOT NULL, priority INTEGER,
-      due_date TEXT, status TEXT NOT NULL DEFAULT 'todo', assignee_id TEXT,
+      due_date TEXT, due_time TEXT, status TEXT NOT NULL DEFAULT 'todo', assignee_id TEXT,
       created_by TEXT NOT NULL, result_note TEXT NOT NULL DEFAULT '',
       created_at TEXT NOT NULL, updated_at TEXT NOT NULL, claimed_at TEXT, submitted_at TEXT,
       completed_at TEXT
@@ -75,12 +75,23 @@ async function initialize(): Promise<Client> {
       "CREATE INDEX IF NOT EXISTS assignments_assignee ON assignments(assignee_id,status)",
       "CREATE INDEX IF NOT EXISTS attachments_assignment ON attachments(assignment_id)",
       "CREATE INDEX IF NOT EXISTS assignment_events_assignment ON assignment_events(assignment_id,created_at)",
+      "SELECT sql FROM sqlite_master WHERE type='table' AND name='assignments'",
       "SELECT COUNT(*) AS count FROM members WHERE role='admin' AND deleted_at IS NULL",
     ],
     "write",
   );
+  if (!String(setup[setup.length - 2].rows[0].sql).includes("due_time")) await addDueTime(client);
   if (!Number(setup[setup.length - 1].rows[0].count)) await seedAdmin(client);
   return client;
+}
+
+/** Eski bazaga muddat soati ustuni qo‘shiladi. Ikki sovuq start bir vaqtga tushsa, ikkinchisi xato bermaydi. */
+async function addDueTime(client: Client) {
+  try {
+    await client.execute("ALTER TABLE assignments ADD COLUMN due_time TEXT");
+  } catch (error) {
+    if (!/duplicate column/i.test(String(error))) throw error;
+  }
 }
 
 /** Birinchi ishga tushirish: avvalgi versiyadagi administrator (paroli bilan) ko‘chiriladi, bo‘lmasa admin/admin. */

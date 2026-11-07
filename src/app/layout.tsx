@@ -1,4 +1,5 @@
 import type { Metadata, Viewport } from "next";
+import "../design-system/dist/uzbtrust.css";
 import "./globals.css";
 export const metadata: Metadata = {
   title: "Fazo Task — hodimlar va vazifalar",

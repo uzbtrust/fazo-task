@@ -15,7 +15,7 @@ import {
   Segmented,
   Spinner,
 } from "./ui";
-import { Empty, Facts, PageHead, rise } from "./page-parts";
+import { Empty, Facts, PageHead } from "./page-parts";
 import { NavLabel, Shell, usePolling, useToast } from "./shell";
 import { TypedLine } from "./typed-line";
 import { firstQuote, pickQuote } from "./quotes";
@@ -103,10 +103,10 @@ export function AdminPanel({ account, initial }: { account: Account; initial: In
             />
           )}
           {members.length ? (
-            memberRoles.map((role, section) => {
+            memberRoles.map((role) => {
               const list = members.filter((m) => m.role === role);
               return (
-                <section key={role} className="role-section rise" style={rise(4 + section)} aria-label={roleInfo[role].plural}>
+                <section key={role} className="role-section" aria-label={roleInfo[role].plural}>
                   <div className="role-head">
                     <h2 className="group-head">
                       {roleInfo[role].plural}

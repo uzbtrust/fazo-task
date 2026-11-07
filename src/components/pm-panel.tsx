@@ -1,11 +1,11 @@
 "use client";
 import { useCallback, useEffect, useMemo, useState } from "react";
-import { BarChart3, ChevronDown, ChevronRight, CircleCheck, Plus, Search, UserRound, Users, X } from "lucide-react";
+import { BarChart3, ChevronRight, CircleCheck, Plus, Users } from "lucide-react";
 import type { Account, Member, Task, TaskStatus } from "@/lib/types";
 import type { Initial } from "@/lib/initial";
 import { REVIEW_STEP } from "@/lib/workflow";
-import { api, Avatar, givenName, isOverdue, Modal, Segmented, todayEyebrow, todayISO } from "./ui";
-import { Empty, Facts, PageHead, rise } from "./page-parts";
+import { api, Avatar, givenName, isOverdue, Modal, todayEyebrow, todayISO } from "./ui";
+import { Empty, Facts, PageHead } from "./page-parts";
 import { NavLabel, Shell, usePolling, useToast } from "./shell";
 import { doneToday, sortTasks, TaskGroups } from "./task-list";
 import { TaskForm } from "./task-form";
@@ -17,7 +17,8 @@ import { firstQuote, pickQuote } from "./quotes";
 
 type View = "tasks" | "designers" | "stats";
 const HASH: Record<View, string> = { tasks: "#vazifalar", designers: "#dizaynerlar", stats: "#statistika" };
-type Filter = "all" | TaskStatus | "overdue";
+type Filter = "all" | "todo" | "in_progress" | "in_review" | "overdue";
+const isLive = (t: Task) => t.status !== "done" && t.status !== "cancelled";
 
 export function PmPanel({ account, initial }: { account: Account; initial: Initial }) {
   const notify = useToast();
@@ -69,9 +70,17 @@ export function PmPanel({ account, initial }: { account: Account; initial: Initi
       ]}
     >
       {view === "stats" ? (
-        <StatsView role="pm" />
+        <StatsView
+          role="pm"
+          archive={{
+            tasks: tasks.filter((t) => !isLive(t)),
+            person: "assignee",
+            designers,
+            onOpen: (task) => setOpenTaskId(task.id),
+          }}
+        />
       ) : view === "tasks" ? (
-        <PmTasks account={account} tasks={tasks} designers={designers} onNew={() => setForm({})} onOpen={(task) => setOpenTaskId(task.id)} />
+        <PmTasks account={account} tasks={tasks} onNew={() => setForm({})} onOpen={(task) => setOpenTaskId(task.id)} />
       ) : (
         <PmDesigners designers={designers} onOpen={(d) => setOpenDesignerId(d.id)} />
       )}
@@ -145,32 +154,25 @@ function byStage(a: Task, b: Task) {
 function PmTasks({
   account,
   tasks,
-  designers,
   onNew,
   onOpen,
 }: {
   account: Account;
   tasks: Task[];
-  designers: Member[];
   onNew: () => void;
   onOpen: (task: Task) => void;
 }) {
-  const [filter, setFilter] = useState<Filter>("all");
-  const [whoChoice, setWho] = useState("all");
-  const [query, setQuery] = useState("");
-  const who = designers.some((d) => d.id === whoChoice) ? whoChoice : "all";
+  const [choice, setFilter] = useState<Filter>("all");
   const today = todayEyebrow();
-  const counts = useMemo(
-    () => ({
-      todo: tasks.filter((t) => t.status === "todo").length,
-      in_progress: tasks.filter((t) => t.status === "in_progress").length,
-      in_review: tasks.filter((t) => t.status === "in_review").length,
-      done: tasks.filter((t) => t.status === "done").length,
-      cancelled: tasks.filter((t) => t.status === "cancelled").length,
-      overdue: tasks.filter((t) => isOverdue(t.dueDate, t.status)).length,
-    }),
-    [tasks],
-  );
+  // Ish stolida faqat hozirgi ishlar; bajarilgan va bekor qilinganlar Statistikada.
+  const live = useMemo(() => tasks.filter(isLive).sort(sortTasks), [tasks]);
+  const late = (t: Task) => isOverdue(t.dueDate, t.status, t.dueTime);
+  const counts = {
+    todo: live.filter((t) => t.status === "todo").length,
+    in_progress: live.filter((t) => t.status === "in_progress").length,
+    in_review: live.filter((t) => t.status === "in_review").length,
+    overdue: live.filter(late).length,
+  };
   const finished = doneToday(tasks, todayISO());
   const context = {
     total: tasks.length,
@@ -181,15 +183,9 @@ function PmTasks({
     overdue: counts.overdue,
   };
   const quote = (recent: string[]) => (recent.length ? pickQuote("pm", context, recent) : firstQuote("pm", context));
-  const needle = query.trim().toLowerCase();
-  const visible = tasks
-    .filter(
-      (t) =>
-        (who === "all" || t.assigneeId === who) &&
-        (filter === "all" || (filter === "overdue" ? isOverdue(t.dueDate, t.status) : t.status === filter)) &&
-        (!needle || `${t.title} ${t.brief} ${t.assigneeName || ""}`.toLowerCase().includes(needle)),
-    )
-    .sort(sortTasks);
+  // Tanlangan saralashda vazifa qolmasa, hammasi ko‘rinadi.
+  const filter = choice !== "all" && counts[choice] ? choice : "all";
+  const visible = live.filter((t) => filter === "all" || (filter === "overdue" ? late(t) : t.status === filter));
   const groups =
     filter === "overdue"
       ? [{ key: "overdue", title: "Muddati o‘tgan", items: visible }]
@@ -197,15 +193,7 @@ function PmTasks({
           { key: "in_review", title: "Tekshiruvda", hint: "Sizning javobingizni kutmoqda", items: visible.filter((t) => t.status === "in_review") },
           { key: "in_progress", title: "Jarayonda", items: visible.filter((t) => t.status === "in_progress") },
           { key: "todo", title: "Ochiq", hint: "Hali hech bir dizayner olmagan", items: visible.filter((t) => t.status === "todo") },
-          { key: "done", title: "Bajarildi", items: visible.filter((t) => t.status === "done") },
-          { key: "cancelled", title: "Bekor qilingan", items: visible.filter((t) => t.status === "cancelled") },
         ];
-  const newButton = (
-    <button className="btn btn-primary btn-lg" onClick={onNew}>
-      <Plus size={19} strokeWidth={2.2} aria-hidden="true" />
-      Vazifa qo‘yish
-    </button>
-  );
   return (
     <>
       <PageHead
@@ -216,96 +204,41 @@ function PmTasks({
         }
         title={`Salom, ${givenName(account.name)}.`}
         dim={<TypedLine next={quote} />}
-        lead="Vazifani qo‘ying — dizaynerlar o‘zlari olishadi. Kerak bo‘lsa, vazifani tahrirlang yoki bekor qiling."
-        action={newButton}
+        action={
+          <button className="btn btn-primary btn-lg" onClick={onNew}>
+            <Plus size={19} strokeWidth={2.2} aria-hidden="true" />
+            Vazifa qo‘yish
+          </button>
+        }
       />
-      <Facts<Filter>
-        active={filter}
-        onSelect={setFilter}
-        items={[
-          ...(REVIEW_STEP
-            ? [{ key: "in_review" as Filter, label: "Tekshiruvda", value: counts.in_review, tone: "accent" as const }]
-            : []),
-          { key: "in_progress", label: "Jarayonda", value: counts.in_progress, tone: REVIEW_STEP ? undefined : "accent" },
-          { key: "todo", label: "Ochiq", value: counts.todo },
-          { key: "done", label: "Bajarildi", value: counts.done },
-          { key: "overdue", label: "Muddati o‘tgan", value: counts.overdue, tone: "bad" },
-        ]}
-      />
-      {!tasks.length ? (
+      {live.length ? (
+        <>
+          <Facts<Filter>
+            active={filter}
+            onSelect={setFilter}
+            items={[
+              ...(REVIEW_STEP
+                ? [{ key: "in_review" as Filter, label: "Tekshiruvda", value: counts.in_review, tone: "accent" as const }]
+                : []),
+              { key: "in_progress", label: "Jarayonda", value: counts.in_progress, tone: REVIEW_STEP ? undefined : "accent" },
+              { key: "todo", label: "Ochiq", value: counts.todo },
+              ...(counts.overdue ? [{ key: "overdue" as Filter, label: "Muddati o‘tgan", value: counts.overdue, tone: "bad" as const }] : []),
+            ]}
+          />
+          <section className="board" aria-label="Hozirgi vazifalar">
+            <TaskGroups groups={groups} onOpen={onOpen} person="assignee" />
+          </section>
+        </>
+      ) : (
         <Empty
           icon={<CircleCheck size={26} strokeWidth={1.6} />}
-          title="Hali vazifa yo‘q."
-          text="Birinchi vazifani qo‘ying: nomi, TZ va nechta rasm kerakligi kifoya. Dizaynerlar uni ochiq vazifalarda ko‘radi."
-          action={
-            <button className="btn btn-primary" onClick={onNew}>
-              <Plus size={17} strokeWidth={2.2} aria-hidden="true" />
-              Vazifa qo‘yish
-            </button>
+          title={tasks.length ? "Hozir ochiq ish yo‘q." : "Hali vazifa yo‘q."}
+          text={
+            tasks.length
+              ? "Hamma vazifalar tugagan. Tugaganlari Statistikada turibdi."
+              : "Birinchi vazifani qo‘ying: nomi, task matni va nechta rasm kerakligi kifoya. Dizaynerlar uni ochiq vazifalarda ko‘radi."
           }
         />
-      ) : (
-        <section className="board rise" style={rise(4)} aria-label="Vazifalar ro‘yxati">
-          <div className="toolbar">
-            <Segmented<Filter>
-              label="Holat bo‘yicha saralash"
-              value={filter}
-              onChange={setFilter}
-              options={[
-                { value: "all", label: "Barchasi", count: tasks.length },
-                ...(REVIEW_STEP ? [{ value: "in_review" as Filter, label: "Tekshiruvda" }] : []),
-                { value: "in_progress", label: "Jarayonda" },
-                { value: "todo", label: "Ochiq" },
-                { value: "done", label: "Bajarildi" },
-                ...(counts.cancelled ? [{ value: "cancelled" as Filter, label: "Bekor qilingan" }] : []),
-              ]}
-            />
-            <div className="toolbar-filters">
-              <label className="pill-field select-pill">
-                <UserRound size={15} strokeWidth={1.8} aria-hidden="true" />
-                <span className="sr-only">Dizayner bo‘yicha saralash</span>
-                <select value={who} onChange={(e) => setWho(e.target.value)}>
-                  <option value="all">Barcha dizaynerlar</option>
-                  {designers.map((d) => (
-                    <option key={d.id} value={d.id}>
-                      {d.name}
-                    </option>
-                  ))}
-                </select>
-                <ChevronDown size={14} strokeWidth={2} aria-hidden="true" />
-              </label>
-              <label className="pill-field search-pill">
-                <Search size={15} strokeWidth={1.8} aria-hidden="true" />
-                <span className="sr-only">Vazifalarni qidirish</span>
-                <input type="search" placeholder="Qidirish" value={query} onChange={(e) => setQuery(e.target.value)} />
-                {query && (
-                  <button type="button" className="pill-clear" aria-label="Qidiruvni tozalash" onClick={() => setQuery("")}>
-                    <X size={13} strokeWidth={2.4} />
-                  </button>
-                )}
-              </label>
-            </div>
-          </div>
-          {visible.length ? (
-            <TaskGroups groups={groups} onOpen={onOpen} person={who === "all" ? "assignee" : undefined} />
-          ) : (
-            <div className="empty empty-quiet">
-              <h2>Mos vazifa topilmadi.</h2>
-              <p>Boshqa so‘z bilan qidiring yoki saralashni bekor qiling.</p>
-              <button
-                type="button"
-                className="link-more"
-                onClick={() => {
-                  setFilter("all");
-                  setWho("all");
-                  setQuery("");
-                }}
-              >
-                Saralashni tozalash
-              </button>
-            </div>
-          )}
-        </section>
       )}
     </>
   );
@@ -346,8 +279,8 @@ function PmDesigners({ designers, onOpen }: { designers: Member[]; onOpen: (memb
       )}
       {designers.length ? (
         <ul className="people-grid" aria-label="Dizaynerlar">
-          {designers.map((member, index) => (
-            <li key={member.id} className="rise" style={rise(4 + Math.min(index, 8))}>
+          {designers.map((member) => (
+            <li key={member.id}>
               <MemberCard member={member} onOpen={() => onOpen(member)} />
             </li>
           ))}
@@ -373,7 +306,7 @@ export function MemberCard({ member, onOpen, showStatus = false }: { member: Mem
     <button type="button" className="person-card" onClick={onOpen}>
       <span className="pc-top">
         <span className="pc-count">
-          <span className="pc-num">{String(isDesigner ? active : s.created).padStart(2, "0")}</span>
+          <span className="pc-num">{isDesigner ? active : s.created}</span>
           <span className="pc-num-label">
             {isDesigner ? <>hozirgi<br />ishi</> : <>qo‘ygan<br />vazifasi</>}
           </span>

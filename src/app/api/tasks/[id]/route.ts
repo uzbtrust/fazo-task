@@ -127,7 +127,7 @@ export async function PATCH(
           const removed = fileIds(body.removeFileIds);
           const kept = task.briefFiles.filter((f) => !removed.includes(f.id));
           if (!fields.brief && !kept.length && !added.length)
-            throw new ApiError(400, "TZ ni matn bilan yozing yoki fayl yuklang.");
+            throw new ApiError(400, "Taskni matn bilan yozing yoki fayl yuklang.");
           for (const fileId of removed)
             await tx.execute({
               sql: "DELETE FROM attachments WHERE id=? AND assignment_id=? AND kind IN ('brief','reference')",
@@ -138,8 +138,8 @@ export async function PATCH(
           // Havolalar yuborilgan bo‘lsa, ro‘yxat to‘liq almashtiriladi.
           if (body.links !== undefined) await saveLinks(tx, id, linkUrls(body.links));
           await tx.execute({
-            sql: "UPDATE assignments SET title=?,brief=?,image_count=?,priority=?,due_date=? WHERE id=?",
-            args: [fields.title, fields.brief, fields.imageCount, fields.priority, fields.dueDate, id],
+            sql: "UPDATE assignments SET title=?,brief=?,image_count=?,priority=?,due_date=?,due_time=? WHERE id=?",
+            args: [fields.title, fields.brief, fields.imageCount, fields.priority, fields.dueDate, fields.dueTime, id],
           });
           break;
         }

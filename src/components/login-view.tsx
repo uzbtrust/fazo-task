@@ -1,7 +1,7 @@
 "use client";
 import { FormEvent, useEffect, useState, type CSSProperties } from "react";
 import { ArrowLeft, Eye, EyeOff } from "lucide-react";
-import { api, ErrorMessage, Segmented, Spinner, Wordmark } from "./ui";
+import { api, ErrorMessage, Segmented, Signature, Spinner, Wordmark } from "./ui";
 
 type Mode = "login" | "register";
 
@@ -46,6 +46,7 @@ export default function LoginView() {
         <span>Fazo Task</span>
         <span aria-hidden="true">·</span>
         <span>Jamoa ishlari bir joyda.</span>
+        <Signature />
       </footer>
     </div>
   );

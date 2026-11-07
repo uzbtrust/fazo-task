@@ -110,14 +110,17 @@ export function longDate(value: string) {
   const p = dateParts(parseDay(value));
   return `${Number(p.day)}-${months[Number(p.month) - 1]}, ${p.year}`;
 }
-export function dateTime(value: string) {
-  const time = new Intl.DateTimeFormat("en-GB", {
+const clock = (date: Date) =>
+  new Intl.DateTimeFormat("en-GB", {
     hour: "2-digit",
     minute: "2-digit",
     hourCycle: "h23",
     timeZone: "Asia/Tashkent",
-  }).format(new Date(value));
-  return `${shortDate(value)}, ${time}`;
+  }).format(date);
+/** Hozirgi soat (HH:MM), Toshkent vaqti. */
+export const nowTime = () => clock(new Date());
+export function dateTime(value: string) {
+  return `${shortDate(value)}, ${clock(new Date(value))}`;
 }
 export function fileSize(bytes: number) {
   return bytes < 1024 * 1024 ? `${Math.max(1, Math.round(bytes / 1024))} KB` : `${(bytes / 1024 / 1024).toFixed(1)} MB`;
@@ -126,17 +129,21 @@ export function todayEyebrow() {
   const p = dateParts(new Date());
   return { date: `${Number(p.day)}-${months[Number(p.month) - 1]}`, weekday: p.weekday };
 }
-export function isOverdue(dueDate: string | null, status: TaskStatus) {
-  return !!dueDate && status !== "done" && status !== "cancelled" && dueDate < todayISO();
+export function isOverdue(dueDate: string | null, status: TaskStatus, dueTime: string | null = null) {
+  if (!dueDate || status === "done" || status === "cancelled") return false;
+  const today = todayISO();
+  return dueDate < today || (dueDate === today && !!dueTime && dueTime < nowTime());
 }
-export function dueLabel(dueDate: string, status: TaskStatus) {
+/** text — ro‘yxat uchun (soat bilan); note — to‘liq sana yonidagi izoh. */
+export function dueLabel(dueDate: string, status: TaskStatus, dueTime: string | null = null) {
+  const at = dueTime ? `, ${dueTime}` : "";
   const diff = dayDiff(dueDate);
-  if (status === "done" || status === "cancelled") return { text: shortDate(dueDate), tone: "" };
-  if (diff < 0)
-    return { text: `${-diff} kun kechikdi`, tone: "bad" };
-  if (diff === 0) return { text: "Bugun", tone: "warn" };
-  if (diff === 1) return { text: "Ertaga", tone: "" };
-  return { text: shortDate(dueDate), tone: "" };
+  if (status === "done" || status === "cancelled") return { text: `${shortDate(dueDate)}${at}`, note: "", tone: "" };
+  if (diff < 0) return { text: `${-diff} kun kechikdi`, note: `${-diff} kun kechikdi`, tone: "bad" };
+  if (isOverdue(dueDate, status, dueTime)) return { text: `Kechikdi${at}`, note: "Kechikdi", tone: "bad" };
+  if (diff === 0) return { text: `Bugun${at}`, note: "Bugun", tone: "warn" };
+  if (diff === 1) return { text: `Ertaga${at}`, note: "", tone: "" };
+  return { text: `${shortDate(dueDate)}${at}`, note: "", tone: "" };
 }
 
 /* ---- Kichik komponentlar --------------------------------------------- */
@@ -148,6 +155,16 @@ export function Wordmark() {
         <path d="m7.2 12.4 3.1 3.1 6.5-7" />
       </svg>
       <span className="wordmark-text">Fazo Task</span>
+    </a>
+  );
+}
+
+/** Muallif imzosi: uzbtrust bilan yasalgan har bir ishda turadi. */
+export function Signature() {
+  return (
+    <a className="signature" href="https://github.com/uzbtrust/design-system" target="_blank" rel="noopener">
+      <span className="uzbtrust-mark" aria-hidden="true" />
+      Dizayn: <strong>Abdurakhmonov</strong>
     </a>
   );
 }
@@ -302,35 +319,7 @@ export function ConfirmDialog({
   );
 }
 
-/** Raqam o‘zgarganda silliq sanab chiqadi (kamaytirilgan harakatda darhol). */
-export function CountUp({ value, pad = 2 }: { value: number; pad?: number }) {
-  const [shown, setShown] = useState(value);
-  const from = useRef(0);
-  useEffect(() => {
-    const start = from.current;
-    from.current = value;
-    if (
-      start === value ||
-      window.matchMedia("(prefers-reduced-motion: reduce)").matches
-    ) {
-      setShown(value);
-      return;
-    }
-    let frame = 0;
-    const began = performance.now();
-    const tick = (now: number) => {
-      const t = Math.min(1, (now - began) / 700);
-      const eased = 1 - Math.pow(1 - t, 4);
-      setShown(Math.round(start + (value - start) * eased));
-      if (t < 1) frame = requestAnimationFrame(tick);
-    };
-    frame = requestAnimationFrame(tick);
-    return () => cancelAnimationFrame(frame);
-  }, [value]);
-  return <>{String(shown).padStart(pad, "0")}</>;
-}
-
-/** Sirpanuvchi indikatorli segmentli tanlov (Apple uslubida). */
+/** Sirpanuvchi indikatorli segmentli tanlov. */
 export function Segmented<T extends string>({
   value,
   options,

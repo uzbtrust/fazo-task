@@ -127,21 +127,24 @@ async function main() {
   status(await designerA.session.request("/api/tasks", { method: "POST", body: { title: "X", brief: "X", imageCount: 1 } }), 403, "Designer cannot create tasks");
   const valid = { title: `QA ${runId} karusel`, brief: "5 slaydli karusel.", imageCount: 2 };
   for (const [body, label] of [
-    [{ title: valid.title, imageCount: 2 }, "TZ is required (text or file)"],
+    [{ title: valid.title, imageCount: 2 }, "Task text is required (text or file)"],
     [{ title: valid.title, brief: "x" }, "Image count is required"],
     [{ ...valid, imageCount: 0 }, "Image count must be positive"],
     [{ ...valid, priority: 6 }, "At most five stars"],
     [{ ...valid, dueDate: "2026-02-30" }, "Impossible date"],
+    [{ ...valid, dueDate: "2099-12-31", dueTime: "24:00" }, "Impossible hour"],
+    [{ ...valid, dueDate: "2099-12-31", dueTime: "9:5" }, "Malformed time"],
     [{ ...valid, title: "" }, "Title is required"],
   ]) status(await pm.request("/api/tasks", { method: "POST", body }), 400, label);
 
-  const brief = status(await upload(pm, "tz.txt", Buffer.from(`TZ ${runId}`)), 201, "PM uploads TZ file");
-  const created = status(await pm.request("/api/tasks", { method: "POST", body: { ...valid, brief: "", fileIds: [brief.file.id], priority: 4, dueDate: "2099-12-31" } }), 201, "PM posts a task with only a TZ file").task;
+  const brief = status(await upload(pm, "task.txt", Buffer.from(`task ${runId}`)), 201, "PM uploads task file");
+  const created = status(await pm.request("/api/tasks", { method: "POST", body: { ...valid, brief: "", fileIds: [brief.file.id], priority: 4, dueDate: "2099-12-31", dueTime: "18:30" } }), 201, "PM posts a task with only a task file").task;
   fixtures.tasks.push(created.id);
   assert.equal(created.assigneeId, null, "New task is not assigned to anyone");
   assert.equal(created.status, "todo");
   assert.equal(created.briefFiles.length, 1);
-  status(await pm.request("/api/tasks", { method: "POST", body: { ...valid, fileIds: [brief.file.id] } }), 400, "A TZ file links to one task only");
+  assert.equal(created.dueTime, "18:30", "Deadline keeps its hour");
+  status(await pm.request("/api/tasks", { method: "POST", body: { ...valid, fileIds: [brief.file.id] } }), 400, "A task file links to one task only");
   const refImage = status(await upload(pm, "namuna.png", PNG), 201, "PM uploads a reference image").file;
   status(await pm.request("/api/tasks", { method: "POST", body: { ...valid, links: ["javascript:alert(1)"] } }), 400, "Only http(s) links");
   const withRefs = status(await pm.request("/api/tasks", {
@@ -166,8 +169,8 @@ async function main() {
     const visible = status(await designer.session.request("/api/tasks"), 200, "Designer sees open tasks").tasks;
     assert.ok(visible.some((t) => t.id === created.id), "Open task is visible to every designer");
     const file = await designer.session.request(brief.file.url);
-    status(file, 200, "Designer reads an open task's TZ before claiming");
-    assert.equal(file.bytes.toString(), `TZ ${runId}`);
+    status(file, 200, "Designer reads an open task's file before claiming");
+    assert.equal(file.bytes.toString(), `task ${runId}`);
   }
   status(await upload(designerA.session, "early.png", PNG, created.id), 404, "No upload before claiming");
 
@@ -179,7 +182,7 @@ async function main() {
   const loser = winner === designerA ? designerB : designerA;
   const loserView = status(await loser.session.request("/api/tasks"), 200, "Loser's list").tasks;
   assert.ok(!loserView.some((t) => t.id === created.id), "Claimed task leaves the other designer's list");
-  status(await loser.session.request(brief.file.url), 404, "Claimed task's TZ is private to the winner");
+  status(await loser.session.request(brief.file.url), 404, "Claimed task's file is private to the winner");
   await act(loser.session, created.id, "complete", {}, 404, "Other designer cannot touch the task");
   console.log("✓ Tasks are posted unassigned; two designers claiming at once — exactly one wins");
 
@@ -242,7 +245,7 @@ async function main() {
   assert.equal(own.daily[own.daily.length - 1].images, 2, "Today's designs are counted");
   const pmStats = status(await pm.request("/api/stats?period=30"), 200, "PM sees statistics of own tasks").stats;
   assert.equal(pmStats.scope, "pm");
-  assert.ok(pmStats.totals.created >= 2, "PM sees how many TZ they posted");
+  assert.ok(pmStats.totals.created >= 2, "PM sees how many tasks they posted");
   assert.equal(pmStats.totals.images, 2, "PM sees designs made on their tasks");
   assert.ok(pmStats.dailyBy && !Object.keys(pmStats.dailyBy).length, "Per-designer charts are admin-only");
   const teamStats = status(await admin.request("/api/stats?period=30"), 200, "Admin sees the whole team").stats;
