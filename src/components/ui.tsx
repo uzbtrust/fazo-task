@@ -72,7 +72,7 @@ export function Signature() {
   return (
     <a className="signature" href="https://github.com/uzbtrust/design-system" target="_blank" rel="noopener">
       <span className="uzbtrust-mark" aria-hidden="true" />
-      Dizayn: <strong>Abdurakhmonov</strong>
+      Dizayn: <strong>uzbtrust</strong>
     </a>
   );
 }

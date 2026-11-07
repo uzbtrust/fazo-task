@@ -1,23 +1,35 @@
 "use client";
+import dynamic from "next/dynamic";
 import type { Account } from "@/lib/types";
 import type { Initial } from "@/lib/initial";
-import { ToastProvider } from "./shell";
-import { AdminPanel } from "./admin-panel";
-import { PmPanel } from "./pm-panel";
-import { DesignerPanel } from "./designer-panel";
+import { ThemeSync, ToastProvider } from "./shell";
 
-/** Har bir rolning o‘z paneli. Yangi kasb qo‘shilganda shu yerga panel ulanadi. */
+type PanelProps = { account: Account; initial: Initial };
+
+/**
+ * Har bir rolning o‘z paneli. Har kim faqat o‘z panelining kodini yuklaydi.
+ * Yangi kasb qo‘shilganda shu yerga panel ulanadi.
+ */
 const panels = {
-  admin: AdminPanel,
-  pm: PmPanel,
-  designer: DesignerPanel,
-} satisfies Record<Account["role"], (props: { account: Account; initial: Initial }) => React.ReactNode>;
+  admin: dynamic<PanelProps>(() => import("./admin-panel").then((m) => m.AdminPanel)),
+  pm: dynamic<PanelProps>(() => import("./pm-panel").then((m) => m.PmPanel)),
+  designer: dynamic<PanelProps>(() => import("./designer-panel").then((m) => m.DesignerPanel)),
+} satisfies Record<Account["role"], unknown>;
 
-export default function Workspace({ account, initial }: { account: Account; initial: Initial }) {
+/** Kirish sahifasi bo‘sh turganda panellar oldindan yuklab qo‘yiladi: kirgach kutish bo‘lmaydi. */
+export function preloadPanels() {
+  void import("./admin-panel");
+  void import("./pm-panel");
+  void import("./designer-panel");
+}
+
+export default function Workspace({ account, initial }: PanelProps) {
   const Panel = panels[account.role];
   return (
     <ToastProvider>
-      <Panel account={account} initial={initial} />
+      <ThemeSync theme={initial.theme}>
+        <Panel account={account} initial={initial} />
+      </ThemeSync>
     </ToastProvider>
   );
 }

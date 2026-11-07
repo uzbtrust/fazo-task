@@ -19,6 +19,6 @@ export async function POST(request: Request) {
     console.error("Telegram bot:", error instanceof Error ? error.message : "xato");
   }
   // Rejali tekshiruv kechiksa ham, bot ishlatilganda eslatmalar yetib boradi.
-  after(() => sweep().catch(() => {}));
+  after(() => sweep(false).catch(() => {}));
   return new Response(null, { status: 200 });
 }

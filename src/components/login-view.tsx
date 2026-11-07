@@ -1,15 +1,41 @@
 "use client";
 import { FormEvent, useEffect, useState, type CSSProperties } from "react";
+import dynamic from "next/dynamic";
 import { ArrowLeft, Eye, EyeOff, Globe, Send } from "lucide-react";
+import type { Account } from "@/lib/types";
+import type { Initial } from "@/lib/initial";
 import { api, ErrorMessage, Segmented, Signature, Spinner, Wordmark } from "./ui";
 import type { MiniApp } from "./telegram-webapp";
 
-type Mode = "login" | "register";
+type Mode = "login" | "register" | "recover";
+
+export interface Signed {
+  user: Account;
+  initial?: Initial;
+}
 
 /** Kirgandan keyin qayerga o‘tiladi va so‘rovga nima qo‘shiladi. */
 interface Context {
   next: string;
   extra: { initData?: string; embedded?: boolean };
+  done: (data: Signed) => void;
+}
+
+const Workspace = dynamic(() => import("./workspace"));
+
+/** Kirish sahifasi bo‘sh turganda ish stoli kodi oldindan yuklanadi: kirgach kutish bo‘lmaydi. */
+export function usePreloadWorkspace() {
+  useEffect(() => {
+    const run = () => void import("./workspace").then((m) => m.preloadPanels());
+    const idle = (window as Window & { requestIdleCallback?: (cb: () => void) => number }).requestIdleCallback;
+    if (idle) idle(run);
+    else setTimeout(run, 1200);
+  }, []);
+}
+
+/** Kirgandan keyin ish stoli shu sahifaning o‘zida ochiladi — server qayta so‘ralmaydi. */
+export function SignedIn({ data }: { data: Required<Signed> }) {
+  return <Workspace account={data.user} initial={data.initial} />;
 }
 
 export default function LoginView({
@@ -26,9 +52,19 @@ export default function LoginView({
   note?: string;
 }) {
   const [mode, setMode] = useState<Mode>(telegram?.register ? "register" : "login");
+  const [session, setSession] = useState<Required<Signed> | null>(null);
+  usePreloadWorkspace();
+  const target = telegram?.next || next;
   const context: Context = {
-    next: telegram?.next || next,
+    next: target,
     extra: telegram ? { initData: telegram.initData, embedded: telegram.embedded } : {},
+    done: (data) => {
+      // Bosh sahifaga ketayotgan bo‘lsa — sahifa qayta yuklanmaydi; boshqa manzil (masalan, Telegram ulash) — o‘tiladi.
+      if (data.initial && (target === "/" || target.startsWith("/#"))) {
+        history.replaceState(null, "", target);
+        setSession({ user: data.user, initial: data.initial });
+      } else window.location.assign(target);
+    },
   };
   useEffect(() => {
     if (window.location.hash === "#royxatdan-otish") setMode("register");
@@ -37,6 +73,7 @@ export default function LoginView({
     setMode(next);
     if (!telegram) history.replaceState(null, "", window.location.search + (next === "register" ? "#royxatdan-otish" : "#"));
   }
+  if (session) return <SignedIn data={session} />;
   return (
     <div className="login">
       <header className="login-top">
@@ -54,23 +91,27 @@ export default function LoginView({
             : note || "Project manager vazifa beradi, dizayner bajaradi — hammasi bir joyda."}
         </p>
         <div className="login-card rise" style={{ "--i": 3 } as CSSProperties}>
-          <Segmented<Mode>
-            label="Kirish turi"
-            className="segmented-block"
-            value={mode}
-            onChange={switchTo}
-            options={[
-              { value: "login", label: "Kirish" },
-              { value: "register", label: "Ro‘yxatdan o‘tish" },
-            ]}
-          />
-          {mode === "login" ? (
-            <LoginForm context={context} onRegister={() => switchTo("register")} />
-          ) : (
-            <RegisterForm context={context} />
+          {mode !== "recover" && (
+            <Segmented<Mode>
+              label="Kirish turi"
+              className="segmented-block"
+              value={mode}
+              onChange={switchTo}
+              options={[
+                { value: "login", label: "Kirish" },
+                { value: "register", label: "Ro‘yxatdan o‘tish" },
+              ]}
+            />
           )}
-          {telegram && <BrowserSignIn telegram={telegram} />}
-          {bot && !telegram && <TelegramSignIn next={next} />}
+          {mode === "login" ? (
+            <LoginForm context={context} onRegister={() => switchTo("register")} onRecover={() => setMode("recover")} />
+          ) : mode === "register" ? (
+            <RegisterForm context={context} />
+          ) : (
+            <RecoverForm context={context} onBack={() => setMode("login")} />
+          )}
+          {telegram && <BrowserSignIn telegram={telegram} done={context.done} />}
+          {bot && !telegram && <TelegramSignIn done={context.done} />}
         </div>
       </main>
       <footer className="foot">
@@ -122,21 +163,21 @@ function PasswordInput({
 }
 
 /** Web-app ichidan: tashqi brauzerda bir martalik havola ochiladi, tasdiqlangach shu yer o‘zi kiradi. */
-function BrowserSignIn({ telegram }: { telegram: MiniApp }) {
+function BrowserSignIn({ telegram, done }: { telegram: MiniApp; done: Context["done"] }) {
   const [waiting, setWaiting] = useState(false);
   const [error, setError] = useState("");
   useEffect(() => {
     if (!waiting) return;
     const check = async () => {
-      const data = await api<{ status: string }>("/api/auth/telegram", {
+      const data = await api<{ status: string } & Partial<Signed>>("/api/auth/telegram", {
         method: "POST",
-        body: JSON.stringify({ initData: telegram.initData, embedded: telegram.embedded }),
+        body: JSON.stringify({ initData: telegram.initData, embedded: telegram.embedded, load: true }),
       }).catch(() => null);
-      if (data?.status === "signed-in") window.location.replace(telegram.next);
+      if (data?.status === "signed-in" && data.user) done({ user: data.user, initial: data.initial });
     };
     const timer = setInterval(() => void check(), 2500);
     return () => clearInterval(timer);
-  }, [waiting, telegram]);
+  }, [waiting, telegram, done]);
   async function open() {
     setError("");
     try {
@@ -171,14 +212,14 @@ function BrowserSignIn({ telegram }: { telegram: MiniApp }) {
 }
 
 /** Saytdan: bot «Bu sizmisiz?» deb so‘raydi, tasdiqlansa shu brauzer kiradi. */
-function TelegramSignIn({ next }: { next: string }) {
+function TelegramSignIn({ done }: { done: Context["done"] }) {
   const [url, setUrl] = useState("");
   const [error, setError] = useState("");
   useEffect(() => {
     if (!url) return;
     const check = async () => {
-      const data = await api<{ status: string }>("/api/auth/telegram/status").catch(() => null);
-      if (data?.status === "signed-in") return window.location.assign(next);
+      const data = await api<{ status: string } & Partial<Signed>>("/api/auth/telegram/status").catch(() => null);
+      if (data?.status === "signed-in" && data.user) return done({ user: data.user, initial: data.initial });
       if (data?.status === "denied" || data?.status === "expired") {
         setUrl("");
         setError(data.status === "denied" ? "Kirish Telegram'da rad etildi." : "So‘rov eskirdi. Qayta urinib ko‘ring.");
@@ -186,7 +227,7 @@ function TelegramSignIn({ next }: { next: string }) {
     };
     const timer = setInterval(() => void check(), 2000);
     return () => clearInterval(timer);
-  }, [url, next]);
+  }, [url, done]);
   async function start() {
     setError("");
     // Yangi oynani bosish paytida ochamiz: keyinroq ochilsa, brauzer to‘sib qo‘yadi.
@@ -224,7 +265,7 @@ function TelegramSignIn({ next }: { next: string }) {
   );
 }
 
-function LoginForm({ context, onRegister }: { context: Context; onRegister: () => void }) {
+function LoginForm({ context, onRegister, onRecover }: { context: Context; onRegister: () => void; onRecover: () => void }) {
   const [username, setUsername] = useState("");
   const [password, setPassword] = useState("");
   const [busy, setBusy] = useState(false);
@@ -234,8 +275,7 @@ function LoginForm({ context, onRegister }: { context: Context; onRegister: () =
     setBusy(true);
     setError("");
     try {
-      await api("/api/auth/login", { method: "POST", body: JSON.stringify({ username, password, ...context.extra }) });
-      window.location.assign(context.next);
+      context.done(await api<Signed>("/api/auth/login", { method: "POST", body: JSON.stringify({ username, password, ...context.extra }) }));
     } catch (e) {
       setError((e as Error).message);
       setBusy(false);
@@ -270,6 +310,117 @@ function LoginForm({ context, onRegister }: { context: Context; onRegister: () =
           Ro‘yxatdan o‘ting
         </button>{" "}
         — administrator bergan login bilan o‘zingizga parol yaratasiz.
+      </p>
+      <p className="login-help">
+        <button type="button" className="link-inline" onClick={onRecover}>
+          Parolni unutdingizmi?
+        </button>
+      </p>
+    </form>
+  );
+}
+
+/** Parolni tiklash: kod hisobga ulangan Telegram'ga boradi. */
+function RecoverForm({ context, onBack }: { context: Context; onBack: () => void }) {
+  const [username, setUsername] = useState("");
+  const [sentTo, setSentTo] = useState("");
+  const [code, setCode] = useState("");
+  const [password, setPassword] = useState("");
+  const [repeat, setRepeat] = useState("");
+  const [busy, setBusy] = useState(false);
+  const [error, setError] = useState("");
+  async function request(e?: FormEvent) {
+    e?.preventDefault();
+    setBusy(true);
+    setError("");
+    try {
+      const data = await api<{ telegram: string }>("/api/auth/recover", { method: "POST", body: JSON.stringify({ username }) });
+      setSentTo(data.telegram);
+      setCode("");
+    } catch (e) {
+      setError((e as Error).message);
+    } finally {
+      setBusy(false);
+    }
+  }
+  async function reset(e: FormEvent) {
+    e.preventDefault();
+    setError("");
+    if (password !== repeat) {
+      setError("Parollar mos kelmadi.");
+      return;
+    }
+    setBusy(true);
+    try {
+      context.done(await api<Signed>("/api/auth/recover", { method: "POST", body: JSON.stringify({ username, code, password }) }));
+    } catch (e) {
+      setError((e as Error).message);
+      setBusy(false);
+    }
+  }
+  const back = (
+    <button type="button" className="icon-button" aria-label="Orqaga" onClick={sentTo ? () => setSentTo("") : onBack}>
+      <ArrowLeft size={17} strokeWidth={2} />
+    </button>
+  );
+  if (!sentTo)
+    return (
+      <form className="login-form" onSubmit={request}>
+        <div className="register-hello">
+          {back}
+          <p>
+            <strong>Parolni tiklash</strong>
+            <span>Kod hisobingizga ulangan Telegram'ga boradi</span>
+          </p>
+        </div>
+        <div className="stacked-fields">
+          <label>
+            <span className="sr-only">Login</span>
+            <input autoComplete="username" placeholder="Login" value={username} onChange={(e) => setUsername(e.target.value)} required autoFocus maxLength={32} autoCapitalize="none" spellCheck={false} />
+          </label>
+        </div>
+        <ErrorMessage message={error} />
+        <button className="btn btn-primary btn-lg btn-block" type="submit" disabled={busy || username.trim().length < 3}>
+          {busy ? <Spinner /> : "Kod yuborish"}
+        </button>
+        <p className="login-help">Telegram ulanmagan bo‘lsa, parolni administrator tiklaydi.</p>
+      </form>
+    );
+  return (
+    <form className="login-form" onSubmit={reset}>
+      <div className="register-hello">
+        {back}
+        <p>
+          <strong>Kod yuborildi</strong>
+          <span>{`Telegram: ${sentTo}`}</span>
+        </p>
+      </div>
+      <div className="stacked-fields">
+        <label>
+          <span className="sr-only">Kod</span>
+          <input
+            className="code-input"
+            autoComplete="one-time-code"
+            inputMode="numeric"
+            placeholder="6 xonali kod"
+            value={code}
+            onChange={(e) => setCode(e.target.value.replace(/\D/g, "").slice(0, 6))}
+            required
+            autoFocus
+          />
+        </label>
+        <PasswordInput value={password} onChange={setPassword} placeholder="Yangi parol" autoComplete="new-password" />
+        <PasswordInput value={repeat} onChange={setRepeat} placeholder="Parolni takrorlang" autoComplete="new-password" />
+      </div>
+      <ErrorMessage message={error} />
+      <button className="btn btn-primary btn-lg btn-block" type="submit" disabled={busy || code.length !== 6 || password.length < 8}>
+        {busy ? <Spinner /> : "Parolni almashtirish va kirish"}
+      </button>
+      <p className="login-help">
+        Kod kelmadimi?{" "}
+        <button type="button" className="link-inline" disabled={busy} onClick={() => void request()}>
+          Qayta yuborish
+        </button>
       </p>
     </form>
   );
@@ -307,8 +458,7 @@ function RegisterForm({ context }: { context: Context }) {
     }
     setBusy(true);
     try {
-      await api("/api/auth/register", { method: "POST", body: JSON.stringify({ username, password, ...context.extra }) });
-      window.location.assign(context.next);
+      context.done(await api<Signed>("/api/auth/register", { method: "POST", body: JSON.stringify({ username, password, ...context.extra }) }));
     } catch (e) {
       setError((e as Error).message);
       setBusy(false);

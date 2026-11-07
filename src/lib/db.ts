@@ -88,6 +88,20 @@ async function initialize(): Promise<Client> {
       // Eslatmalar: har biri bir marta yuboriladi; o‘chirib qo‘yganlar alohida.
       "CREATE TABLE IF NOT EXISTS telegram_reminders (key TEXT PRIMARY KEY, sent_at TEXT NOT NULL)",
       "CREATE TABLE IF NOT EXISTS telegram_muted (telegram_id TEXT PRIMARY KEY)",
+      // Bot ekrani: bosh menyu va ish xabari; o‘chiriladigan xabarlar navbati.
+      `CREATE TABLE IF NOT EXISTS telegram_screens (
+      telegram_id TEXT PRIMARY KEY, home_id INTEGER, home_sig TEXT, work_id INTEGER, work_photo INTEGER,
+      work_at TEXT, cleaned INTEGER NOT NULL DEFAULT 0
+    )`,
+      `CREATE TABLE IF NOT EXISTS telegram_messages (
+      chat TEXT NOT NULL, message_id INTEGER NOT NULL, kind TEXT NOT NULL, task_id TEXT,
+      sent_at TEXT NOT NULL, delete_at TEXT, PRIMARY KEY (chat, message_id)
+    )`,
+      "CREATE INDEX IF NOT EXISTS telegram_messages_task ON telegram_messages(task_id)",
+      "CREATE TABLE IF NOT EXISTS member_settings (member_id TEXT PRIMARY KEY, theme TEXT)",
+      `CREATE TABLE IF NOT EXISTS password_resets (
+      member_id TEXT PRIMARY KEY, code_hash TEXT NOT NULL, attempts INTEGER NOT NULL DEFAULT 0, expires_at TEXT NOT NULL
+    )`,
       "CREATE INDEX IF NOT EXISTS member_sessions_expiry ON member_sessions(expires_at)",
       "CREATE INDEX IF NOT EXISTS assignments_assignee ON assignments(assignee_id,status)",
       "CREATE INDEX IF NOT EXISTS attachments_assignment ON attachments(assignment_id)",

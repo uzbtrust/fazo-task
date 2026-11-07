@@ -1,9 +1,10 @@
 name: Eslatmalar
 
-# Telegram eslatmalarini tekshiradi. Sir kerak emas: sayt faqat vaqti kelgan eslatmani yuboradi.
+# Telegram: eslatmalar, eskirgan xabarlarni o‘chirish, bosh menyuni yangilash.
+# Sir kerak emas: sayt faqat vaqti kelgan ishni bajaradi.
 on:
   schedule:
-    - cron: "*/15 * * * *"
+    - cron: "*/5 * * * *"
   workflow_dispatch:
 
 jobs:

@@ -694,3 +694,40 @@
   margin-left: 6px;
   color: var(--fg-4);
 }
+
+/* Belgilash qatori: matn va izoh bilan */
+.check-row {
+  display: flex;
+  align-items: flex-start;
+  gap: 12px;
+  padding: 12px 14px;
+  border-radius: var(--r-sm);
+  background: var(--fill);
+  font-size: var(--fs-sm);
+  letter-spacing: var(--track-small);
+  cursor: pointer;
+}
+.check-row input {
+  width: 18px;
+  height: 18px;
+  margin-top: 2px;
+  accent-color: var(--accent);
+  flex: none;
+}
+.check-row span {
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+}
+.check-row small {
+  color: var(--fg-3);
+  font-size: var(--fs-xs);
+  letter-spacing: var(--track-caption);
+}
+
+/* Tiklash kodi: katta, raqamlar orasi keng */
+.stacked-fields input.code-input {
+  font-size: 1.375rem;
+  font-variant-numeric: tabular-nums;
+  letter-spacing: 0.3em;
+}

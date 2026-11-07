@@ -3,10 +3,13 @@ import { db } from "../db";
 import { givenName } from "../roles";
 import { getTasks } from "../tasks";
 import type { Task } from "../types";
-import { inline, say, sendPhoto, telegramEnabled } from "./api";
+import { publicAccount } from "../server";
+import { themesOf } from "../settings";
+import { action, inline, removeMany, say, sendPhoto, telegramEnabled } from "./api";
+import { refreshHomes, showHome } from "./home";
 import { taskListImage, type Lead } from "./images";
 import { designers, recipient, sendTask, type Recipient } from "./notify";
-import { taskButton } from "./views";
+import { cleanup, saveScreen, track } from "./screens";
 
 const HOUR = 3600_000;
 const DAY = 24 * HOUR;
@@ -118,6 +121,7 @@ async function morningDigest(tasks: Task[], muted: Set<string>) {
   const late = (t: Task) => (deadlineOf(t) ?? Infinity) < Date.now();
   const dueToday = (t: Task) => t.dueDate === today && !late(t);
   let sent = 0;
+  const themes = await themesOf(rows.map((row) => String(row.id)));
   for (const row of rows) {
     const chat = String(row.telegram_id);
     if (muted.has(chat)) continue;
@@ -155,32 +159,67 @@ async function morningDigest(tasks: Task[], muted: Set<string>) {
         { title: "Keyingi", items: pick(restItems) },
         { title: "Ochiq", items: mine.length ? [] : shown },
       ],
+      theme: themes.get(id) ?? "dark",
     }).catch(() => null);
-    const markup = inline(shown.map((task) => taskButton(task, kind)));
-    const caption = `<b>Xayrli tong, ${name}.</b>\n${dim}`;
-    if (image) await sendPhoto(chat, image, caption, markup).catch(() => say(chat, caption, markup));
-    else await say(chat, caption, markup);
+    const markup = inline([...shown.map((task) => [action(task.title.slice(0, 40), `t:${task.id}:${kind}`)]), [action("Yopish", "x")]]);
+    const caption = `<b>Xayrli tong, ${name}.</b> ${dim}`;
+    const message = image
+      ? await sendPhoto(chat, image, caption, markup).catch(() => say(chat, caption, markup))
+      : await say(chat, caption, markup);
+    if (message) await track(chat, message.message_id, "note");
     sent += 1;
   }
   return sent;
 }
 
+/** Eski chatni bir marta tozalaydi: oldingi xabarlar o‘chadi, o‘rniga bosh menyu turadi. */
+const CLEAN_RANGE = 3000;
+async function rollout(deadline: number) {
+  const rows = (
+    await (await db()).execute(`SELECT m.*,t.telegram_id AS chat FROM telegram_accounts t JOIN members m ON m.id=t.member_id
+      LEFT JOIN telegram_screens s ON s.telegram_id=t.telegram_id
+      WHERE COALESCE(s.cleaned,0)=0 AND m.deleted_at IS NULL AND m.password_hash IS NOT NULL`)
+  ).rows;
+  let done = 0;
+  for (const row of rows) {
+    if (Date.now() > deadline) break;
+    const chat = String(row.chat);
+    try {
+      // Eski pastki menyu shu xabar bilan yo‘qoladi; xabarning o‘zi keyin o‘chiriladi.
+      const marker = await say(chat, "Menyu yangilandi.", { remove_keyboard: true }, { disable_notification: true });
+      const home = await showHome(chat, publicAccount(row), true, undefined, true);
+      const top = Math.max(home, marker?.message_id || 0);
+      const ids = Array.from({ length: CLEAN_RANGE }, (_, i) => top - i).filter((id) => id > 0 && id !== home);
+      await removeMany(chat, ids);
+      await saveScreen(chat, { cleaned: true });
+      done += 1;
+    } catch (error) {
+      console.error("Telegram tozalash:", error instanceof Error ? error.message : "xato");
+    }
+  }
+  return done;
+}
+
 /**
- * Eslatmalarni tekshiradi. Tashqaridan ochiq chaqirilishi xavfsiz: yuboriladigan narsa faqat vaqti
- * kelgan eslatma, har biri bir marta, tekshiruv esa 5 daqiqada ko‘pi bilan bir marta ishlaydi.
+ * Rejali tekshiruv. Tashqaridan ochiq chaqirilishi xavfsiz: o‘chirish — faqat vaqti kelgan xabarlar,
+ * eslatma — faqat vaqti kelganlar, har biri bir marta, eslatmalar esa 5 daqiqada ko‘pi bilan bir marta.
  */
-export async function sweep() {
+export async function sweep(full = true) {
   if (!telegramEnabled()) return { sent: 0, skipped: "off" };
   const database = await db();
   const now = Date.now();
+  const removed = await cleanup(now);
+  // Og‘ir ishlar faqat rejali tekshiruvda: bot javobini sekinlashtirmasin.
+  const cleaned = full ? await rollout(now + 40_000) : 0;
+  if (full) await refreshHomes();
   const slot = await database.execute({
     sql: `INSERT INTO telegram_reminders(key,sent_at) VALUES ('sweep',?)
       ON CONFLICT(key) DO UPDATE SET sent_at=excluded.sent_at WHERE sent_at<?`,
     args: [new Date(now).toISOString(), new Date(now - SWEEP_EVERY).toISOString()],
   });
-  if (slot.rowsAffected !== 1) return { sent: 0, skipped: "recent" };
+  if (slot.rowsAffected !== 1) return { sent: 0, removed, cleaned, skipped: "recent" };
   const clock = nowTime();
-  if (clock < WORK_FROM || clock >= WORK_TO) return { sent: 0, skipped: "night" };
+  if (clock < WORK_FROM || clock >= WORK_TO) return { sent: 0, removed, cleaned, skipped: "night" };
   const tasks = await getTasks(database);
   const muted = await mutedChats();
   let sent = 0;
@@ -190,5 +229,5 @@ export async function sweep() {
     sql: "DELETE FROM telegram_reminders WHERE sent_at<? AND key<>'sweep'",
     args: [new Date(now - 60 * DAY).toISOString()],
   });
-  return { sent };
+  return { sent, removed, cleaned };
 }
