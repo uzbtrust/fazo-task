@@ -8,7 +8,7 @@ import type { Row } from "@/lib/db";
 export const runtime = "nodejs";
 
 /**
- * PM: TZ fayli — hali vazifaga bog‘lanmagan holda yuklanadi, vazifa saqlanganda bog‘lanadi.
+ * PM: task fayli — hali vazifaga bog‘lanmagan holda yuklanadi, vazifa saqlanganda bog‘lanadi.
  * Dizayner: tayyor ish — `assignmentId` bilan to‘g‘ridan-to‘g‘ri o‘z vazifasiga yuklanadi.
  */
 export async function POST(request: Request) {

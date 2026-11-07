@@ -23,3 +23,9 @@ export const memberRoles = ["pm", "designer"] as const satisfies readonly Role[]
 export type MemberRole = (typeof memberRoles)[number];
 export const isMemberRole = (value: unknown): value is MemberRole =>
   memberRoles.includes(value as MemberRole);
+
+/** Ism tartibi har xil bo‘lishi mumkin (avval familiya yoki avval ism) — familiyani chetlab o‘tamiz. */
+export function givenName(name: string) {
+  const words = name.split(/\s+/).filter(Boolean);
+  return words.find((w) => !/(ov|ova|ev|eva|yev|yeva)$/i.test(w)) || words[0] || name;
+}

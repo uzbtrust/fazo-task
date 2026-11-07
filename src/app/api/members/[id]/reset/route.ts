@@ -1,6 +1,7 @@
 import { requireUser } from "@/lib/auth";
 import { db } from "@/lib/db";
 import { api, ApiError, checkOrigin } from "@/lib/server";
+import { unlinkMember } from "@/lib/telegram/accounts";
 export const runtime = "nodejs";
 
 /** Parolni tiklash: hodim yana «Ro‘yxatdan o‘tish» orqali yangi parol yaratadi. */
@@ -20,6 +21,7 @@ export async function POST(
     });
     if (result.rowsAffected !== 1) throw new ApiError(404, "Hodim topilmadi.");
     await database.execute({ sql: "DELETE FROM member_sessions WHERE member_id=?", args: [id] });
+    await unlinkMember(id, "Parolingiz tiklandi. Yangi parol yarating va qayta kiring: /start");
     return { ok: true };
   });
 }

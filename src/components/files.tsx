@@ -24,7 +24,7 @@ export const isImage = (file: FileMeta) => /^image\/(png|jpeg|webp|gif)$/.test(f
 const opensInBrowser = (file: FileMeta) => file.mime === "application/pdf" || file.mime === "text/plain";
 
 /* ---- Fonda oldindan yuklash ------------------------------------------------
-   Ro‘yxat darhol ko‘rinadi; TZ fayllari va rasmlar esa brauzer bo‘sh paytida birma-bir
+   Ro‘yxat darhol ko‘rinadi; task fayllari va rasmlar esa brauzer bo‘sh paytida birma-bir
    yuklanib, HTTP keshga tushadi. Vazifa ochilganda ular kutmasdan ko‘rinadi. */
 const warmed = new Set<string>();
 const idle = (fn: () => void) =>

@@ -15,8 +15,9 @@ export function returnNote(task: Task) {
 export function sortTasks(a: Task, b: Task) {
   if (a.status === "done" && b.status === "done")
     return (b.completedAt || "").localeCompare(a.completedAt || "");
-  const ad = a.dueDate || "9999-12-31";
-  const bd = b.dueDate || "9999-12-31";
+  // Soatsiz muddat kun oxiri hisoblanadi.
+  const ad = `${a.dueDate || "9999-12-31"}T${a.dueTime || "24:00"}`;
+  const bd = `${b.dueDate || "9999-12-31"}T${b.dueTime || "24:00"}`;
   if (ad !== bd) return ad.localeCompare(bd);
   if ((a.priority || 0) !== (b.priority || 0)) return (b.priority || 0) - (a.priority || 0);
   return b.number - a.number;
@@ -32,7 +33,7 @@ export function TaskRow({
   /** Qatorda kim ko‘rsatiladi: PMga — dizayner, dizaynerga — PM. */
   person?: "assignee" | "creator";
 }) {
-  const due = task.dueDate ? dueLabel(task.dueDate, task.status) : null;
+  const due = task.dueDate ? dueLabel(task.dueDate, task.status, task.dueTime) : null;
   const snippet = task.brief.split("\n").find((line) => line.trim());
   const returned = returnNote(task);
   const name = person === "creator" ? task.creatorName : task.assigneeName;
@@ -40,7 +41,7 @@ export function TaskRow({
   const uploaded = task.resultFiles.length;
   const showProgress = task.status !== "todo" && (REVIEW_STEP || uploaded > 0);
   return (
-    <li className={`task-row is-${task.status}`}>
+    <li className={`list-row is-${task.status}`}>
       <span className="row-glyph">
         <StatusGlyph status={task.status} />
       </span>
@@ -80,7 +81,6 @@ export function TaskRow({
               {due.text}
             </span>
           )}
-          {person === "assignee" && !name && <span className="tag">Hech kim olmagan</span>}
           {showPerson && (
             <span className="person-chip">
               <Avatar name={name} size="sm" />

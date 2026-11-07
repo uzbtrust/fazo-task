@@ -1,8 +1,5 @@
 "use client";
-import type { CSSProperties, ReactNode } from "react";
-import { CountUp } from "./ui";
-
-const rise = (i: number) => ({ "--i": i }) as CSSProperties;
+import type { ReactNode } from "react";
 
 export function PageHead({
   eyebrow,
@@ -14,23 +11,21 @@ export function PageHead({
   eyebrow: ReactNode;
   title: string;
   dim: ReactNode;
-  lead: string;
+  lead?: string;
   action?: ReactNode;
 }) {
   return (
     <header className="page-head">
       <div className="page-head-text">
-        <p className="eyebrow rise">{eyebrow}</p>
-        <h1 className="page-title rise" style={rise(1)}>
+        <p className="eyebrow">{eyebrow}</p>
+        <h1 className="page-title">
           {title}
           <span className="dim">{dim}</span>
         </h1>
-        <p className="page-lead rise" style={rise(2)}>
-          {lead}
-        </p>
+        {lead && <p className="page-lead">{lead}</p>}
       </div>
       {action && (
-        <div className="page-actions rise" style={rise(2)}>
+        <div className="page-actions">
           {action}
         </div>
       )}
@@ -48,7 +43,7 @@ export function Facts<K extends string>({
   onSelect?: (key: K | "all") => void;
 }) {
   return (
-    <div className="facts rise" style={rise(3)}>
+    <div className="facts">
       {items.map((item) =>
         onSelect ? (
           <button
@@ -59,16 +54,12 @@ export function Facts<K extends string>({
             disabled={!item.value && active !== item.key}
             onClick={() => onSelect(active === item.key ? "all" : item.key)}
           >
-            <span className="fact-num">
-              <CountUp value={item.value} />
-            </span>
+            <span className="fact-num">{item.value}</span>
             <span className="fact-label">{item.label}</span>
           </button>
         ) : (
           <div key={item.key} className={`fact is-static ${item.value && item.tone ? `is-${item.tone}` : ""}`}>
-            <span className="fact-num">
-              <CountUp value={item.value} />
-            </span>
+            <span className="fact-num">{item.value}</span>
             <span className="fact-label">{item.label}</span>
           </div>
         ),
@@ -82,16 +73,14 @@ export function Empty({
   title,
   text,
   action,
-  index = 4,
 }: {
   icon: ReactNode;
   title: string;
   text: string;
   action?: ReactNode;
-  index?: number;
 }) {
   return (
-    <div className="empty rise" style={rise(index)}>
+    <div className="empty">
       <span className="empty-icon">{icon}</span>
       <h2>{title}</h2>
       <p>{text}</p>
@@ -100,4 +89,3 @@ export function Empty({
   );
 }
 
-export { rise };

@@ -1,6 +1,9 @@
+import { after } from "next/server";
 import { db } from "@/lib/db";
 import { checkPassword, createSession, DUMMY_HASH, loginLimit } from "@/lib/auth";
 import { api, ApiError, checkOrigin, publicAccount, readBody, text } from "@/lib/server";
+import { linkTelegram, telegramName, verifyInitData } from "@/lib/telegram/accounts";
+import { afterLinked } from "@/lib/telegram/bot";
 
 export const runtime = "nodejs";
 export async function POST(request: Request) {
@@ -25,7 +28,14 @@ export async function POST(request: Request) {
         "Bu hisob uchun hali parol yaratilmagan. «Ro‘yxatdan o‘tish» bo‘limida parol yarating.",
       );
     if (!row || !valid) throw new ApiError(401, "Login yoki parol noto‘g‘ri.");
-    await createSession(String(row.id));
-    return { user: publicAccount(row) };
+    await createSession(String(row.id), body.embedded === true);
+    const account = publicAccount(row);
+    // Web-app ichida kirilsa, Telegram shu hisobga ulanadi — bot ham kirgan bo‘ladi.
+    const telegram = verifyInitData(body.initData);
+    if (telegram) {
+      await linkTelegram({ id: telegram.id, name: telegramName(telegram), username: telegram.username }, account.id);
+      after(() => afterLinked(telegram.id, account));
+    }
+    return { user: account };
   });
 }

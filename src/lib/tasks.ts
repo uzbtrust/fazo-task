@@ -1,6 +1,6 @@
 import { randomUUID } from "node:crypto";
 import { readBatch, type Database, type Row } from "./db";
-import { ApiError, text, todayISO } from "./server";
+import { ApiError, nowTime, text, todayISO } from "./server";
 import type {
   FileKind,
   FileMeta,
@@ -17,7 +17,7 @@ import type {
 
 export function taskFields(body: Record<string, unknown>) {
   const title = text(body.title, "Vazifa nomini", 160);
-  const brief = text(body.brief, "TZ matnini", 20000, false);
+  const brief = text(body.brief, "Task matnini", 20000, false);
   const imageCount = body.imageCount;
   if (
     typeof imageCount !== "number" || !Number.isInteger(imageCount) || imageCount < 1 || imageCount > 100
@@ -43,12 +43,17 @@ export function taskFields(body: Record<string, unknown>) {
     )
       throw new ApiError(400, "Muddat sanasi noto‘g‘ri.");
   }
+  // Soat faqat sana bilan birga ma’noli; soatsiz muddat — kun oxirigacha.
+  const dueTime = dueDate === null || !body.dueTime ? null : body.dueTime;
+  if (dueTime !== null && (typeof dueTime !== "string" || !/^([01]\d|2[0-3]):[0-5]\d$/.test(dueTime)))
+    throw new ApiError(400, "Muddat soati noto‘g‘ri.");
   return {
     title,
     brief,
     imageCount,
     priority: priority as Priority | null,
     dueDate: dueDate as string | null,
+    dueTime: dueTime as string | null,
   };
 }
 
@@ -63,7 +68,7 @@ export function fileIds(value: unknown): string[] {
   return [...new Set(value as string[])];
 }
 
-/** PM yuklagan, hali hech qaysi vazifaga bog‘lanmagan fayllarni TZ yoki referens sifatida bog‘laydi. */
+/** PM yuklagan, hali hech qaysi vazifaga bog‘lanmagan fayllarni task yoki referens sifatida bog‘laydi. */
 export async function linkFiles(
   database: Database,
   assignmentId: string,
@@ -190,6 +195,7 @@ export async function getTasks(
       imageCount: Number(row.image_count),
       priority: row.priority === null ? null : (Number(row.priority) as Priority),
       dueDate: row.due_date ? String(row.due_date) : null,
+      dueTime: row.due_date && row.due_time ? String(row.due_time) : null,
       status: row.status as TaskStatus,
       assigneeId: row.assignee_id ? String(row.assignee_id) : null,
       assigneeName: row.assignee_id ? String(row.assignee_name ?? "Dizayner") : null,
@@ -230,9 +236,9 @@ export async function getMembers(database: Database, roles: Role[]): Promise<Mem
     },
     {
       sql: `SELECT assignee_id,status,COUNT(*) AS count,
-        SUM(CASE WHEN due_date<? AND status NOT IN ('done','cancelled') THEN 1 ELSE 0 END) AS overdue
+        SUM(CASE WHEN status NOT IN ('done','cancelled') AND (due_date<? OR (due_date=? AND due_time<?)) THEN 1 ELSE 0 END) AS overdue
         FROM assignments GROUP BY assignee_id,status`,
-      args: [todayISO()],
+      args: [todayISO(), todayISO(), nowTime()],
     },
     "SELECT created_by,COUNT(*) AS count FROM assignments GROUP BY created_by",
   ]);
@@ -269,7 +275,8 @@ const tashkentDay = (iso: string) =>
 
 /**
  * Statistika. Admin — butun jamoa; PM — o‘zi qo‘ygan vazifalar; dizayner — o‘zi bajargan ishlar.
- * «Vaqtida» — dizayner muddat kuni tugaguncha (Toshkent vaqti) tugatgan yoki topshirgan bo‘lsa.
+ * «Vaqtida» — dizayner belgilangan soatgacha, soat bo‘lmasa muddat kuni tugaguncha (Toshkent vaqti)
+ * tugatgan yoki topshirgan bo‘lsa.
  * Davr — vazifa bajarilgan (statistikaga kiradigan) sana bo‘yicha.
  */
 export async function getStats(
@@ -280,7 +287,7 @@ export async function getStats(
   const days = period === "all" ? 90 : Number(period);
   const since = period === "all" ? "" : new Date(Date.now() - days * 864e5).toISOString();
   const [taskResult, returnResult, memberResult] = await readBatch(database, [
-    "SELECT id,status,assignee_id,created_by,image_count,due_date,created_at,claimed_at,submitted_at,completed_at FROM assignments",
+    "SELECT id,status,assignee_id,created_by,image_count,due_date,due_time,created_at,claimed_at,submitted_at,completed_at FROM assignments",
     "SELECT assignment_id,member_id,created_at FROM assignment_events WHERE action='return'",
     "SELECT id,name,role FROM members WHERE deleted_at IS NULL AND role IN ('designer','pm') ORDER BY created_at",
   ]);
@@ -294,7 +301,7 @@ export async function getStats(
   );
   const inPeriod = (date: unknown) => !since || (typeof date === "string" && date >= since);
   const onTime = (row: Row) =>
-    !!row.submitted_at && new Date(String(row.submitted_at)) <= new Date(`${row.due_date}T23:59:59+05:00`);
+    !!row.submitted_at && new Date(String(row.submitted_at)) <= new Date(`${row.due_date}T${row.due_time || "23:59"}:59+05:00`);
   const hoursOf = (rows: Row[]) => {
     const hours = rows
       .filter((t) => t.claimed_at && t.submitted_at)

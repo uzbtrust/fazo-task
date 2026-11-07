@@ -57,6 +57,8 @@ export interface Task {
   imageCount: number;
   priority: Priority | null;
   dueDate: string | null;
+  /** HH:MM, Toshkent vaqti. null — muddat kun oxirigacha. */
+  dueTime: string | null;
   status: TaskStatus;
   /** null — ochiq vazifa, hali hech kim olmagan. */
   assigneeId: string | null;

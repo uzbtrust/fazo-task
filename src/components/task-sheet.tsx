@@ -92,7 +92,7 @@ export function TaskSheet({
   const canRelease = task.status === "in_progress" && (isPm || isDesigner);
   const canCancel = isPm && ["todo", "in_progress", "in_review"].includes(task.status);
   const canUpload = isDesigner && task.status === "in_progress";
-  const due = task.dueDate ? dueLabel(task.dueDate, task.status) : null;
+  const due = task.dueDate ? dueLabel(task.dueDate, task.status, task.dueTime) : null;
   const returned = returnNote(task);
   const cancelled = task.status === "cancelled" ? [...task.events].reverse().find((e) => e.action === "cancel") : null;
   const images = task.resultFiles.filter(isImage).length;
@@ -253,7 +253,9 @@ export function TaskSheet({
             <div className="prop">
               <dt>Muddat</dt>
               <dd className={due?.tone ? `tone-${due.tone}` : ""}>
-                {task.dueDate ? `${longDate(task.dueDate)}${due?.tone ? ` · ${due.text}` : ""}` : "Belgilanmagan"}
+                {task.dueDate
+                  ? `${longDate(task.dueDate)}${task.dueTime ? `, ${task.dueTime}` : ""}${due?.note ? ` · ${due.note}` : ""}`
+                  : "Belgilanmagan"}
               </dd>
             </div>
             <div className="prop">
@@ -263,7 +265,7 @@ export function TaskSheet({
           </dl>
 
           <section className="sheet-section">
-            <h3 className="sheet-section-title">TZ</h3>
+            <h3 className="sheet-section-title">Task</h3>
             {task.brief && <p className="sheet-text">{task.brief}</p>}
             <Attachments files={task.briefFiles} />
           </section>
@@ -412,7 +414,7 @@ export function TaskSheet({
           title="Vazifani o‘chirasizmi?"
           message={
             <>
-              <strong>{task.title}</strong>, uning TZ va natija fayllari butunlay o‘chiriladi va statistikaga
+              <strong>{task.title}</strong>, uning task va natija fayllari butunlay o‘chiriladi va statistikaga
               kirmaydi. Faqat to‘xtatish kerak bo‘lsa, «Bekor qilish»ni tanlang.
             </>
           }

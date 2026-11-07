@@ -21,6 +21,7 @@ export function TaskForm({
   const [brief, setBrief] = useState(task?.brief || "");
   const [imageCount, setImageCount] = useState(task ? String(task.imageCount) : "");
   const [dueDate, setDueDate] = useState(task?.dueDate || "");
+  const [dueTime, setDueTime] = useState(task?.dueTime || "");
   const [priority, setPriority] = useState<Priority | null>(task?.priority ?? null);
   const [kept, setKept] = useState<FileMeta[]>(task?.briefFiles || []);
   const [added, setAdded] = useState<FileMeta[]>([]);
@@ -38,7 +39,7 @@ export function TaskForm({
     e.preventDefault();
     setError("");
     if (!brief.trim() && !files.length) {
-      setError("TZ ni matn bilan yozing yoki fayl yuklang.");
+      setError("Taskni matn bilan yozing yoki fayl yuklang.");
       return;
     }
     setBusy(true);
@@ -49,6 +50,7 @@ export function TaskForm({
         imageCount: count,
         priority,
         dueDate: dueDate || null,
+        dueTime: dueTime || null,
         fileIds: added.map((f) => f.id),
         referenceIds: addedRefs.map((f) => f.id),
         links,
@@ -94,12 +96,12 @@ export function TaskForm({
         </label>
         <div className="field">
           <span className="field-label">
-            TZ <span className="optional">matn yoki fayl — kamida bittasi</span>
+            Task <span className="optional">matn yoki fayl — kamida bittasi</span>
           </span>
           <textarea
             className="input"
             rows={5}
-            aria-label="TZ matni"
+            aria-label="Task matni"
             placeholder="Nima kerak: o‘lcham, uslub, matnlar, ranglar, havolalar…"
             value={brief}
             onChange={(e) => setBrief(e.target.value)}
@@ -107,7 +109,7 @@ export function TaskForm({
           />
           <FileDrop
             busy={uploader.busy}
-            title="TZ faylini yuklash"
+            title="Task faylini yuklash"
             hint="PDF, Word, rasm yoki dizayn fayli · 4 MB gacha · sudrab tashlash mumkin"
             onFiles={(list) => uploader.upload(list, (file) => setAdded((prev) => [...prev, file]))}
           />
@@ -193,7 +195,15 @@ export function TaskForm({
           <span className="field-label">
             Muddat <span className="optional">ixtiyoriy</span>
           </span>
-          <DatePicker label="Muddat" value={dueDate} onChange={setDueDate} />
+          <DatePicker
+            label="Muddat"
+            value={dueDate}
+            time={dueTime}
+            onChange={(date, time) => {
+              setDueDate(date);
+              setDueTime(time);
+            }}
+          />
         </div>
         <div className="field">
           <span className="field-label">

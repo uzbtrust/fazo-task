@@ -8,6 +8,7 @@ import {
 } from "@/lib/auth";
 import { db } from "@/lib/db";
 import { api, ApiError, checkOrigin, newPassword, readBody } from "@/lib/server";
+import { unlinkMember } from "@/lib/telegram/accounts";
 export const runtime = "nodejs";
 export async function GET() {
   return api(async () => ({ user: await requireUser() }));
@@ -43,6 +44,8 @@ export async function PATCH(request: Request) {
         args: [passwordHash(next), user.id],
       });
       await transaction.commit();
+      // Parol almashishi boshqa kirishlarni yopadi; Telegram ham ulardan biri.
+      await unlinkMember(user.id, "Parolingiz o‘zgardi. Qayta kirish uchun /start ni bosing.");
       return { user };
     } catch (error) {
       if (!transaction.closed) await transaction.rollback();
