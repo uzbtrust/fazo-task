@@ -1,3 +1,5 @@
+import type { TaskStatus } from "./types";
+
 /**
  * Ish oqimi sozlamasi — server ham, interfeys ham shu qiymatga qaraydi.
  *
@@ -7,3 +9,11 @@
  *   Ochiq → Jarayonda → Tekshiruvda → Bajarildi.
  */
 export const REVIEW_STEP = false;
+
+export const statusLabels: Record<TaskStatus, string> = {
+  todo: "Ochiq",
+  in_progress: "Jarayonda",
+  in_review: "Tekshiruvda",
+  done: "Bajarildi",
+  cancelled: "Bekor qilingan",
+};

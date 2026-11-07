@@ -1,3 +1,4 @@
+import { after } from "next/server";
 import { db, passwordHash } from "@/lib/db";
 import { createSession, loginLimit } from "@/lib/auth";
 import { roleInfo } from "@/lib/roles";
@@ -10,6 +11,8 @@ import {
   readBody,
   text,
 } from "@/lib/server";
+import { linkTelegram, telegramName, verifyInitData } from "@/lib/telegram/accounts";
+import { afterLinked } from "@/lib/telegram/bot";
 import type { Role } from "@/lib/types";
 
 export const runtime = "nodejs";
@@ -47,7 +50,13 @@ export async function POST(request: Request) {
     });
     if (updated.rowsAffected !== 1)
       throw new ApiError(409, "Bu login bilan allaqachon ro‘yxatdan o‘tilgan. «Kirish» bo‘limidan kiring.");
-    await createSession(String(row.id));
-    return { user: publicAccount(row) };
+    await createSession(String(row.id), body.embedded === true);
+    const account = publicAccount(row);
+    const telegram = verifyInitData(body.initData);
+    if (telegram) {
+      await linkTelegram({ id: telegram.id, name: telegramName(telegram), username: telegram.username }, account.id);
+      after(() => afterLinked(telegram.id, account));
+    }
+    return { user: account };
   });
 }

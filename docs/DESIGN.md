@@ -41,6 +41,7 @@ Muallif belgisi: pastda `Signature` («Dizayn: Abdurakhmonov»). Ilovaning o‘z
   - dizaynerlar jadvalida rasmlar soni bitta rangli gorizontal ustun bilan;
   - telefonda jadval kartalarga aylanadi.
 - **Dialoglar:** markazda varaq, telefonda pastdan chiqadi.
+- **Telegram:** web-app xuddi shu ilovaning o‘zi (`/tg` orqali kiradi) va Telegram mavzusiga ergashadi. Bot xabarlarida emoji yo‘q: oddiy matn, qalin sarlavha, `★` muhimlik uchun.
 
 ## Harakat
 

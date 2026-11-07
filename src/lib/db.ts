@@ -71,6 +71,19 @@ async function initialize(): Promise<Client> {
       id TEXT PRIMARY KEY, assignment_id TEXT NOT NULL, member_id TEXT NOT NULL,
       action TEXT NOT NULL, message TEXT NOT NULL DEFAULT '', created_at TEXT NOT NULL
     )`,
+      // Telegram: bitta hisob — bitta Telegram; chat holati va bir martalik havolalar.
+      `CREATE TABLE IF NOT EXISTS telegram_accounts (
+      telegram_id TEXT PRIMARY KEY, member_id TEXT NOT NULL UNIQUE, name TEXT NOT NULL DEFAULT '',
+      username TEXT, linked_at TEXT NOT NULL
+    )`,
+      `CREATE TABLE IF NOT EXISTS telegram_chats (
+      telegram_id TEXT PRIMARY KEY, step TEXT NOT NULL, data TEXT NOT NULL DEFAULT '{}', updated_at TEXT NOT NULL
+    )`,
+      `CREATE TABLE IF NOT EXISTS telegram_tokens (
+      token_hash TEXT PRIMARY KEY, kind TEXT NOT NULL, telegram_id TEXT, telegram_name TEXT, telegram_username TEXT,
+      member_id TEXT, browser_hash TEXT, device TEXT, status TEXT NOT NULL DEFAULT 'pending', expires_at TEXT NOT NULL
+    )`,
+      "CREATE INDEX IF NOT EXISTS telegram_tokens_browser ON telegram_tokens(browser_hash)",
       "CREATE INDEX IF NOT EXISTS member_sessions_expiry ON member_sessions(expires_at)",
       "CREATE INDEX IF NOT EXISTS assignments_assignee ON assignments(assignee_id,status)",
       "CREATE INDEX IF NOT EXISTS attachments_assignment ON attachments(assignment_id)",

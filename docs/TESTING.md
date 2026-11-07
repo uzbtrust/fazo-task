@@ -36,6 +36,17 @@ The helper only removes members whose login and name carry the exact prefix, and
 
 Sign-in and registration share a limiter (10 attempts per login, 40 per IP in 15 minutes). Running the suite several times in a row from one machine can hit it; wait 15 minutes or clear `login_attempts` in the local database.
 
+## Telegram
+
+`tests/telegram.mjs` uses its own fake Telegram API, so no real bot or chat is touched. Start the app against a disposable database and the fake API, then run the suite:
+
+```sh
+BOT_TOKEN=test-token TELEGRAM_API_URL=http://127.0.0.1:4055 TURSO_DATABASE_URL=file:/tmp/fazo-test.db npm run dev
+npm run test:telegram
+```
+
+It covers every sign-in path (in-chat login and password, web-app, one-time browser link, connecting from the site, Telegram login on the site), forged and expired `initData`, single-use links, task notifications, bot buttons, the PM task wizard, file delivery and access rules, and sign-out. A real device still has to be checked once after deployment: the Mini App opening, the menu button and `openLink`.
+
 Remote fixture execution requires `TEST_ALLOW_REMOTE=1`. Set it only for the intended deployment.
 
 Browser verification should cover each role's panel at 375 px, 768 px and 1440 px in light and dark themes:

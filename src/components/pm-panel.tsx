@@ -40,6 +40,10 @@ export function PmPanel({ account, initial }: { account: Account; initial: Initi
   useEffect(() => {
     const fromHash = (Object.keys(HASH) as View[]).find((v) => HASH[v] === window.location.hash);
     if (fromHash) setView(fromHash);
+    // Botdan: vazifa yoki yangi vazifa shakli to‘g‘ri ochiladi.
+    if (window.location.hash.startsWith("#vazifa=")) setOpenTaskId(window.location.hash.slice(8));
+    if (window.location.hash === "#yangi-vazifa") setForm({});
+    if (!fromHash && window.location.hash) history.replaceState(null, "", window.location.pathname);
   }, []);
   usePolling(refresh);
   useWarmFiles(tasks);

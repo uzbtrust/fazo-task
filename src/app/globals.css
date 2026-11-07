@@ -615,3 +615,82 @@
   flex-basis: 100%;
   justify-content: center;
 }
+
+/* Kirish: Telegram va brauzer usullari */
+.login-alt {
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+}
+.login-or {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  color: var(--fg-3);
+  font-size: var(--fs-xs);
+  letter-spacing: var(--track-caption);
+}
+.login-or::before,
+.login-or::after {
+  content: "";
+  flex: 1;
+  height: 1px;
+  background: var(--line-soft);
+}
+.login-wait {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 10px;
+  min-height: 48px;
+  color: var(--fg-3);
+  font-size: var(--fs-sm);
+  letter-spacing: var(--track-small);
+  text-align: left;
+}
+
+/* Telegram'ni hisobga ulash */
+.link-pair {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+  padding: 16px;
+  border-radius: var(--r-lg);
+  background: var(--card);
+}
+.link-pair p {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  min-width: 0;
+}
+.link-pair p > span:last-child {
+  display: flex;
+  flex-direction: column;
+  min-width: 0;
+}
+.link-pair strong {
+  font-size: var(--fs-body);
+  font-weight: 600;
+  letter-spacing: var(--track-body);
+  overflow-wrap: anywhere;
+}
+.link-pair small {
+  color: var(--fg-3);
+  font-size: var(--fs-xs);
+  letter-spacing: var(--track-caption);
+}
+.link-icon {
+  display: grid;
+  place-items: center;
+  flex: none;
+  width: 28px;
+  height: 28px;
+  border-radius: 50%;
+  background: var(--accent-soft);
+  color: var(--accent-ink);
+}
+.link-arrow {
+  margin-left: 6px;
+  color: var(--fg-4);
+}

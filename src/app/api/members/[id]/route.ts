@@ -3,6 +3,7 @@ import { db } from "@/lib/db";
 import { isMemberRole, memberRoles } from "@/lib/roles";
 import { api, ApiError, checkOrigin, readBody, text, username } from "@/lib/server";
 import { getMembers } from "@/lib/tasks";
+import { unlinkMember } from "@/lib/telegram/accounts";
 import type { Database } from "@/lib/db";
 export const runtime = "nodejs";
 
@@ -92,6 +93,7 @@ export async function DELETE(
       ],
       "write",
     );
+    await unlinkMember(id, "Hisobingiz jamoadan olindi.");
     return { ok: true };
   });
 }

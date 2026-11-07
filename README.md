@@ -46,6 +46,40 @@ Har bir rolda «Statistika» bo‘limi bor; davr — 7 kun, 30 kun yoki hammasi 
 
 Yangi hodim qo‘shilsa, u jadvallarda avtomatik paydo bo‘ladi. Bekor qilingan vazifalar statistikaga kirmaydi.
 
+
+## Telegram
+
+Bot ([@fazotaskbot](https://t.me/fazotaskbot)) va web-app bitta hisobga bog‘lanadi: bir marta kirilsa, qolganlari o‘zi taniydi.
+
+**Kirish yo‘llari**
+
+- **Bot ichida:** login va parol. Parol xabari darhol o‘chiriladi.
+- **Web-app ichida:** kirish shakli yoki ro‘yxatdan o‘tish. Keyin bot ham kirgan bo‘ladi.
+- **Brauzer orqali:** bot yoki web-app bir martalik havola beradi. Brauzerda kirilgan bo‘lsa, bitta tasdiq yetadi; shundan keyin bot va web-app o‘zi kiradi.
+- **Saytda «Telegram orqali kirish»:** bot «Bu sizmisiz?» deb so‘raydi, tasdiqlansa brauzer kiradi.
+- **Saytdan ulash:** hisob menyusida «Telegram'ni ulash».
+- **Botdan brauzerga:** «Hisob» bo‘limidagi «Brauzerda ochish» parolsiz kiradi.
+
+Ro‘yxatdan o‘tish faqat web-app yoki saytda. Parol o‘zgarsa, parol tiklansa yoki hodim o‘chirilsa, Telegram ajraladi.
+
+**Botdagi ishlar**
+
+- Dizayner: amaldagi va ochiq vazifalar, «Men olaman», «Tugatdim», «Bo‘shatish», fayllarni olish, statistika.
+- PM: hozirgi vazifalar, tugmalar bilan yangi vazifa qo‘yish, bekor qilish, qayta ochish, dizaynerlar, statistika.
+- Administrator: jamoa va statistika. Hodim qo‘shish web-app yoki saytda.
+
+**Xabarnomalar:** yangi yoki qayta ochilgan vazifa dizaynerlarga boradi. PMga vazifa olingani, tugagani va bo‘shatilgani, dizaynerga bekor qilingani va o‘zgargani haqida xabar keladi.
+
+**Ishga tushirish**
+
+1. Vercel'da `BOT_TOKEN` muhit o‘zgaruvchisini qo‘shing.
+2. Saytni deploy qiling.
+3. Webhook, buyruqlar va menyu tugmasini o‘rnating:
+
+```sh
+node scripts/telegram-setup.mjs https://fazo-task.vercel.app
+```
+
 ## Salomlashish jumlalari
 
 Har panelda «Salom, …» sarlavhasi ostida jumla klaviaturada yozilayotgandek chiqadi: inson kabi to‘xtab-to‘xtab yoziladi, 5–6 soniya turadi, o‘chiriladi va yangisi yoziladi. Har rolga 100 tadan jumla (`src/components/quotes.ts`) bor, ular holatga qarab tanlanadi: dizaynerning qo‘li bo‘shmi yoki ish ko‘pmi, bugun ko‘p dizayn tayyor bo‘ldimi, muddati o‘tgan ish bormi. Harakat kamaytirilgan rejimda jumlalar animatsiyasiz almashadi.

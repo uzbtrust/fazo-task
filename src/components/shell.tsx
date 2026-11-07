@@ -10,10 +10,11 @@ import {
   useState,
   type ReactNode,
 } from "react";
-import { CircleAlert, CircleCheck, KeyRound, LogOut, Moon, Sun } from "lucide-react";
+import { CircleAlert, CircleCheck, KeyRound, LogOut, Moon, Send, Sun } from "lucide-react";
 import type { Account } from "@/lib/types";
 import { roleInfo } from "@/lib/roles";
 import { api, Avatar, ErrorMessage, Modal, Segmented, Signature, Spinner, Wordmark } from "./ui";
+import { storedInitData } from "./telegram-webapp";
 
 type Toast = { message: string; tone?: "error" };
 const ToastContext = createContext<(toast: Toast | string) => void>(() => {});
@@ -135,8 +136,10 @@ export function Shell<V extends string>({
 
   async function logout() {
     try {
-      await api("/api/auth/logout", { method: "POST" });
-      window.location.replace("/login");
+      // Web-app ichidan chiqilsa, Telegram ham ajratiladi.
+      const initData = storedInitData();
+      await api("/api/auth/logout", { method: "POST", body: JSON.stringify(initData ? { initData } : {}) });
+      window.location.replace(initData ? "/tg" : "/login");
     } catch (e) {
       notify({ message: (e as Error).message, tone: "error" });
     }
@@ -200,6 +203,7 @@ export function Shell<V extends string>({
                       <KeyRound size={16} strokeWidth={1.8} aria-hidden="true" />
                       Parolni almashtirish
                     </button>
+                    <TelegramItem onDone={() => setMenu(false)} />
                     <button type="button" role="menuitem" className="menu-item" onClick={() => void logout()}>
                       <LogOut size={16} strokeWidth={1.8} aria-hidden="true" />
                       Chiqish
@@ -230,6 +234,51 @@ export function Shell<V extends string>({
           />
         )}
     </div>
+  );
+}
+
+/** Hisob menyusida: Telegram'ni ulash yoki ajratish. Web-app ichida kerak emas. */
+function TelegramItem({ onDone }: { onDone: () => void }) {
+  const notify = useToast();
+  const [state, setState] = useState<{ enabled: boolean; telegram: { name: string } | null } | null>(null);
+  useEffect(() => {
+    if (storedInitData()) return;
+    let alive = true;
+    api<{ enabled: boolean; telegram: { name: string } | null }>("/api/me/telegram").then(
+      (data) => alive && setState(data),
+      () => {},
+    );
+    return () => {
+      alive = false;
+    };
+  }, []);
+  if (!state?.enabled) return null;
+  async function connect() {
+    // Yangi oyna bosish paytida ochiladi: keyinroq ochilsa, brauzer to‘sadi.
+    const tab = window.open("", "_blank");
+    try {
+      const { url } = await api<{ url: string }>("/api/me/telegram", { method: "POST" });
+      if (tab) tab.location.href = url;
+      onDone();
+    } catch (e) {
+      tab?.close();
+      notify({ message: (e as Error).message, tone: "error" });
+    }
+  }
+  async function disconnect() {
+    try {
+      await api("/api/me/telegram", { method: "DELETE" });
+      notify("Telegram ajratildi");
+      onDone();
+    } catch (e) {
+      notify({ message: (e as Error).message, tone: "error" });
+    }
+  }
+  return (
+    <button type="button" role="menuitem" className="menu-item" onClick={() => void (state.telegram ? disconnect() : connect())}>
+      <Send size={16} strokeWidth={1.8} aria-hidden="true" />
+      {state.telegram ? `Telegram'ni ajratish (${state.telegram.name})` : "Telegram'ni ulash"}
+    </button>
   );
 }
 

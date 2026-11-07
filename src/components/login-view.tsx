@@ -1,18 +1,41 @@
 "use client";
 import { FormEvent, useEffect, useState, type CSSProperties } from "react";
-import { ArrowLeft, Eye, EyeOff } from "lucide-react";
+import { ArrowLeft, Eye, EyeOff, Globe, Send } from "lucide-react";
 import { api, ErrorMessage, Segmented, Signature, Spinner, Wordmark } from "./ui";
+import type { MiniApp } from "./telegram-webapp";
 
 type Mode = "login" | "register";
 
-export default function LoginView() {
-  const [mode, setMode] = useState<Mode>("login");
+/** Kirgandan keyin qayerga o‘tiladi va so‘rovga nima qo‘shiladi. */
+interface Context {
+  next: string;
+  extra: { initData?: string; embedded?: boolean };
+}
+
+export default function LoginView({
+  bot = false,
+  telegram,
+  next = "/",
+  note,
+}: {
+  /** Saytda «Telegram orqali kirish» ko‘rinadi. */
+  bot?: boolean;
+  /** Telegram web-app ichida ochilgan. */
+  telegram?: MiniApp;
+  next?: string;
+  note?: string;
+}) {
+  const [mode, setMode] = useState<Mode>(telegram?.register ? "register" : "login");
+  const context: Context = {
+    next: telegram?.next || next,
+    extra: telegram ? { initData: telegram.initData, embedded: telegram.embedded } : {},
+  };
   useEffect(() => {
     if (window.location.hash === "#royxatdan-otish") setMode("register");
   }, []);
   function switchTo(next: Mode) {
     setMode(next);
-    history.replaceState(null, "", next === "register" ? "#royxatdan-otish" : "#");
+    if (!telegram) history.replaceState(null, "", window.location.search + (next === "register" ? "#royxatdan-otish" : "#"));
   }
   return (
     <div className="login">
@@ -26,7 +49,9 @@ export default function LoginView() {
           <span className="dim">Har kimga o‘z paneli.</span>
         </h1>
         <p className="login-lead rise" style={{ "--i": 2 } as CSSProperties}>
-          Project manager vazifa beradi, dizayner bajaradi — hammasi bir joyda.
+          {telegram
+            ? `Salom, ${telegram.name}. Bir marta kirsangiz, bot va ilova sizni o‘zi taniydi.`
+            : note || "Project manager vazifa beradi, dizayner bajaradi — hammasi bir joyda."}
         </p>
         <div className="login-card rise" style={{ "--i": 3 } as CSSProperties}>
           <Segmented<Mode>
@@ -39,7 +64,13 @@ export default function LoginView() {
               { value: "register", label: "Ro‘yxatdan o‘tish" },
             ]}
           />
-          {mode === "login" ? <LoginForm onRegister={() => switchTo("register")} /> : <RegisterForm />}
+          {mode === "login" ? (
+            <LoginForm context={context} onRegister={() => switchTo("register")} />
+          ) : (
+            <RegisterForm context={context} />
+          )}
+          {telegram && <BrowserSignIn telegram={telegram} />}
+          {bot && !telegram && <TelegramSignIn next={next} />}
         </div>
       </main>
       <footer className="foot">
@@ -90,7 +121,110 @@ function PasswordInput({
   );
 }
 
-function LoginForm({ onRegister }: { onRegister: () => void }) {
+/** Web-app ichidan: tashqi brauzerda bir martalik havola ochiladi, tasdiqlangach shu yer o‘zi kiradi. */
+function BrowserSignIn({ telegram }: { telegram: MiniApp }) {
+  const [waiting, setWaiting] = useState(false);
+  const [error, setError] = useState("");
+  useEffect(() => {
+    if (!waiting) return;
+    const check = async () => {
+      const data = await api<{ status: string }>("/api/auth/telegram", {
+        method: "POST",
+        body: JSON.stringify({ initData: telegram.initData, embedded: telegram.embedded }),
+      }).catch(() => null);
+      if (data?.status === "signed-in") window.location.replace(telegram.next);
+    };
+    const timer = setInterval(() => void check(), 2500);
+    return () => clearInterval(timer);
+  }, [waiting, telegram]);
+  async function open() {
+    setError("");
+    try {
+      const { url } = await api<{ url: string }>("/api/auth/telegram/browser", {
+        method: "POST",
+        body: JSON.stringify({ initData: telegram.initData }),
+      });
+      if (window.Telegram?.WebApp) window.Telegram.WebApp.openLink(url);
+      else window.open(url, "_blank");
+      setWaiting(true);
+    } catch (e) {
+      setError((e as Error).message);
+    }
+  }
+  return (
+    <div className="login-alt">
+      <span className="login-or">yoki</span>
+      <ErrorMessage message={error} />
+      {waiting ? (
+        <p className="login-wait">
+          <Spinner label="Kutilmoqda" />
+          Brauzerda tasdiqlang, keyin bu yer o‘zi ochiladi.
+        </p>
+      ) : (
+        <button type="button" className="btn btn-secondary btn-lg btn-block" onClick={() => void open()}>
+          <Globe size={17} strokeWidth={1.9} aria-hidden="true" />
+          Brauzer orqali kirish
+        </button>
+      )}
+    </div>
+  );
+}
+
+/** Saytdan: bot «Bu sizmisiz?» deb so‘raydi, tasdiqlansa shu brauzer kiradi. */
+function TelegramSignIn({ next }: { next: string }) {
+  const [url, setUrl] = useState("");
+  const [error, setError] = useState("");
+  useEffect(() => {
+    if (!url) return;
+    const check = async () => {
+      const data = await api<{ status: string }>("/api/auth/telegram/status").catch(() => null);
+      if (data?.status === "signed-in") return window.location.assign(next);
+      if (data?.status === "denied" || data?.status === "expired") {
+        setUrl("");
+        setError(data.status === "denied" ? "Kirish Telegram'da rad etildi." : "So‘rov eskirdi. Qayta urinib ko‘ring.");
+      }
+    };
+    const timer = setInterval(() => void check(), 2000);
+    return () => clearInterval(timer);
+  }, [url, next]);
+  async function start() {
+    setError("");
+    // Yangi oynani bosish paytida ochamiz: keyinroq ochilsa, brauzer to‘sib qo‘yadi.
+    const tab = window.open("", "_blank");
+    try {
+      const data = await api<{ url: string }>("/api/auth/telegram/start", { method: "POST" });
+      if (tab) tab.location.href = data.url;
+      setUrl(data.url);
+    } catch (e) {
+      tab?.close();
+      setError((e as Error).message);
+    }
+  }
+  return (
+    <div className="login-alt">
+      <span className="login-or">yoki</span>
+      <ErrorMessage message={error} />
+      {url ? (
+        <div className="login-wait">
+          <Spinner label="Kutilmoqda" />
+          <span>
+            Telegram&apos;da «Ha, kirish»ni bosing.{" "}
+            <a className="link-inline" href={url} target="_blank" rel="noopener">
+              Qayta ochish
+            </a>
+          </span>
+        </div>
+      ) : (
+        <button type="button" className="btn btn-secondary btn-lg btn-block" onClick={() => void start()}>
+          <Send size={17} strokeWidth={1.9} aria-hidden="true" />
+          Telegram orqali kirish
+        </button>
+      )}
+    </div>
+  );
+}
+
+function LoginForm({ context, onRegister }: { context: Context; onRegister: () => void }) {
   const [username, setUsername] = useState("");
   const [password, setPassword] = useState("");
   const [busy, setBusy] = useState(false);
@@ -100,8 +234,8 @@ function LoginForm({ onRegister }: { onRegister: () => void }) {
     setBusy(true);
     setError("");
     try {
-      await api("/api/auth/login", { method: "POST", body: JSON.stringify({ username, password }) });
-      window.location.assign("/");
+      await api("/api/auth/login", { method: "POST", body: JSON.stringify({ username, password, ...context.extra }) });
+      window.location.assign(context.next);
     } catch (e) {
       setError((e as Error).message);
       setBusy(false);
@@ -141,7 +275,7 @@ function LoginForm({ onRegister }: { onRegister: () => void }) {
   );
 }
 
-function RegisterForm() {
+function RegisterForm({ context }: { context: Context }) {
   const [username, setUsername] = useState("");
   const [member, setMember] = useState<{ name: string; role: string } | null>(null);
   const [password, setPassword] = useState("");
@@ -173,8 +307,8 @@ function RegisterForm() {
     }
     setBusy(true);
     try {
-      await api("/api/auth/register", { method: "POST", body: JSON.stringify({ username, password }) });
-      window.location.assign("/");
+      await api("/api/auth/register", { method: "POST", body: JSON.stringify({ username, password, ...context.extra }) });
+      window.location.assign(context.next);
     } catch (e) {
       setError((e as Error).message);
       setBusy(false);

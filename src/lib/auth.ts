@@ -65,7 +65,8 @@ export async function requireUser(...roles: Role[]): Promise<Account> {
   return session.user;
 }
 
-async function writeSession(token: string, memberId: string, extend = false) {
+/** embedded — Telegram Web ichidagi iframe: u yerda oddiy cookie yuborilmaydi. */
+async function writeSession(token: string, memberId: string, extend = false, embedded = false) {
   const expiry = new Date(Date.now() + SESSION_DAYS * 864e5);
   const database = await db();
   if (extend) {
@@ -91,11 +92,12 @@ async function writeSession(token: string, memberId: string, extend = false) {
     sameSite: "lax",
     path: "/",
     expires: expiry,
+    ...(embedded && process.env.VERCEL ? { sameSite: "none" as const, partitioned: true } : {}),
   });
 }
 
-export async function createSession(memberId: string) {
-  await writeSession(randomBytes(32).toString("hex"), memberId);
+export async function createSession(memberId: string, embedded = false) {
+  await writeSession(randomBytes(32).toString("hex"), memberId, false, embedded);
 }
 
 export async function clearSession() {
@@ -117,17 +119,26 @@ export async function clearSession() {
   });
 }
 
-export async function loginLimit(request: Request, username: string) {
-  const now = Date.now();
-  const ip =
+export function clientIp(request: Request) {
+  return (
     request.headers.get("x-vercel-forwarded-for")?.split(",")[0]?.trim() ||
     request.headers.get("x-forwarded-for")?.split(",")[0]?.trim() ||
-    "local";
-  const database = await db();
-  for (const [key, max] of [
+    "local"
+  );
+}
+
+export async function loginLimit(request: Request, username: string) {
+  await attemptLimit([
     [`user:${username.toLowerCase()}`, 10],
-    [`ip:${ip}`, 40],
-  ] as const) {
+    [`ip:${clientIp(request)}`, 40],
+  ]);
+}
+
+/** Urinishlar cheklovi: kalit va 15 daqiqadagi eng ko‘p urinish. */
+export async function attemptLimit(limits: (readonly [string, number])[]) {
+  const now = Date.now();
+  const database = await db();
+  for (const [key, max] of limits) {
     const result = await database.execute({
       sql: `INSERT INTO login_attempts(key,attempts,reset_at) VALUES (?,1,?)
         ON CONFLICT(key) DO UPDATE SET attempts=CASE WHEN reset_at<? THEN 1 ELSE attempts+1 END,

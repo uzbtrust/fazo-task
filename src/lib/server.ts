@@ -112,20 +112,7 @@ export function username(value: unknown): string {
   return clean;
 }
 
-/** Toshkent vaqti bo‘yicha bugungi sana (YYYY-MM-DD). */
-export function todayISO() {
-  return new Intl.DateTimeFormat("en-CA", { timeZone: "Asia/Tashkent" }).format(new Date());
-}
-
-/** Toshkent vaqti bo‘yicha hozirgi soat (HH:MM). */
-export function nowTime() {
-  return new Intl.DateTimeFormat("en-GB", {
-    hour: "2-digit",
-    minute: "2-digit",
-    hourCycle: "h23",
-    timeZone: "Asia/Tashkent",
-  }).format(new Date());
-}
+export { nowTime, todayISO } from "./dates";
 
 export async function readBody(
   request: Request,

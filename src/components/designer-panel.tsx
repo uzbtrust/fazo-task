@@ -28,6 +28,11 @@ export function DesignerPanel({ account, initial }: { account: Account; initial:
   useEffect(() => {
     const fromHash = (Object.keys(HASH) as View[]).find((v) => HASH[v] === window.location.hash);
     if (fromHash) setChosen(fromHash);
+    // Botdagi «Ilovada ochish»: vazifa to‘g‘ri ochiladi.
+    if (window.location.hash.startsWith("#vazifa=")) {
+      setOpenId(window.location.hash.slice(8));
+      history.replaceState(null, "", window.location.pathname);
+    }
   }, []);
   usePolling(refresh);
   useWarmFiles(tasks);
