@@ -1,13 +1,13 @@
 # Fazo Task — dizayn asosi
 
-Asosiy manba: **[uzbtrust design system](https://github.com/uzbtrust/design-system)**, v1.3.1. Tizim ilovaga ulangan, nusxa emas:
+Asosiy manba: **[uzbtrust design system](https://github.com/uzbtrust/design-system)**, v1.3.1 va undan keyingi `d5aed88` (muallif belgisi qoidasi). Tizim ilovaga ulangan, nusxa emas:
 
 - `src/design-system/` — tizimning o‘zi (`dist/uzbtrust.css`, Inter shrifti). Qo‘lda o‘zgartirilmaydi.
 - `src/app/globals.css` — faqat ilovaga xos narsalar: hodim kartalari, fayllar, lightbox, muddat soati. Avval tizimdagi token va klassni ishlating.
 
 Tizim yangilansa: repodan `dist/uzbtrust.css` va `fonts/` ni `src/design-system/` ga ko‘chiring, shu fayldagi versiyani yangilang va ekranlarni tekshiring.
 
-Muallif belgisi: pastda `Signature` («Dizayn: Abdurakhmonov»). Ilovaning o‘z logosi bor, shuning uchun navigatsiya va favicon'da Fazo Task belgisi turadi.
+Muallif belgisi (tizim litsenziyasi sharti, olib tashlanmaydi): saytda pastda `Signature` — yulduz va «Dizayn: uzbtrust»; bot rasmlarida pastki o‘ng burchakda yulduz va «Abdurakhmonov», chunki rasm fayl hisoblanadi. Ilovaning o‘z logosi bor, shuning uchun navigatsiya va favicon'da Fazo Task belgisi turadi.
 
 ## Til
 

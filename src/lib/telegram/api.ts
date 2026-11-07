@@ -124,11 +124,14 @@ export interface SentPhoto extends Sent {
   photo?: { file_id: string }[];
 }
 
-/** Rasm yuboradi: fayl yoki avval yuklangan file_id. Bir xil rasm har odamga qayta yuklanmaydi. */
-export async function sendPhoto(chatId: string | number, photo: Buffer | string, caption: string, markup?: unknown) {
-  const fields = { chat_id: String(chatId), caption, parse_mode: "HTML" };
+/**
+ * Rasm yuboradi: fayl yoki avval yuklangan file_id. Bir xil rasm har odamga qayta yuklanmaydi.
+ * silent — ovozsiz (bosh menyu va tozalash), xabarnoma emas.
+ */
+export async function sendPhoto(chatId: string | number, photo: Buffer | string, caption: string, markup?: unknown, silent = false) {
+  const fields = { chat_id: String(chatId), caption, parse_mode: "HTML", ...(silent ? { disable_notification: "true" } : {}) };
   if (typeof photo === "string")
-    return tg<SentPhoto>("sendPhoto", { ...fields, photo, ...(markup ? { reply_markup: markup } : {}) });
+    return tg<SentPhoto>("sendPhoto", { ...fields, disable_notification: silent, photo, ...(markup ? { reply_markup: markup } : {}) });
   const form = new FormData();
   for (const [key, value] of Object.entries(fields)) form.set(key, value);
   if (markup) form.set("reply_markup", JSON.stringify(markup));
@@ -159,6 +162,18 @@ export async function editCaption(chatId: number, messageId: number, caption: st
   } catch (error) {
     if (!(error instanceof TelegramError) || !/not modified/i.test(error.message)) throw error;
   }
+}
+
+/** Xabarni o‘chiradi; allaqachon yo‘q bo‘lsa, jim o‘tadi. */
+export async function remove(chatId: string | number, messageId: number | null | undefined) {
+  if (!messageId) return;
+  await tg("deleteMessage", { chat_id: chatId, message_id: messageId }).catch(() => {});
+}
+
+/** Ko‘p xabarni 100 tadan o‘chiradi. Topilmagan raqamlarni Telegram o‘zi o‘tkazib yuboradi. */
+export async function removeMany(chatId: string | number, ids: number[]) {
+  for (let i = 0; i < ids.length; i += 100)
+    await tg("deleteMessages", { chat_id: chatId, message_ids: ids.slice(i, i + 100) }).catch(() => {});
 }
 
 export const inline = (keyboard: Keyboard) => ({ inline_keyboard: keyboard });

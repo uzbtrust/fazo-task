@@ -53,24 +53,42 @@ Bot ([@fazotaskbot](https://t.me/fazotaskbot)) va web-app bitta hisobga bog‘la
 
 **Kirish yo‘llari**
 
-- **Bot ichida:** login va parol. Parol xabari darhol o‘chiriladi.
+- **Bot ichida:** login va parol. Yozilgan xabarlar darhol o‘chiriladi.
 - **Web-app ichida:** kirish shakli yoki ro‘yxatdan o‘tish. Keyin bot ham kirgan bo‘ladi.
 - **Brauzer orqali:** bot yoki web-app bir martalik havola beradi. Brauzerda kirilgan bo‘lsa, bitta tasdiq yetadi; shundan keyin bot va web-app o‘zi kiradi.
 - **Saytda «Telegram orqali kirish»:** bot «Bu sizmisiz?» deb so‘raydi, tasdiqlansa brauzer kiradi.
 - **Saytdan ulash:** hisob menyusida «Telegram'ni ulash».
-- **Botdan brauzerga:** «Hisob» bo‘limidagi «Brauzerda ochish» parolsiz kiradi.
+- **Botdan brauzerga:** «Hisob» ekranidagi «Brauzerda ochish» parolsiz kiradi.
 
-Ro‘yxatdan o‘tish faqat web-app yoki saytda. Parol o‘zgarsa, parol tiklansa yoki hodim o‘chirilsa, Telegram ajraladi.
+Ro‘yxatdan o‘tish faqat web-app yoki saytda. Parol tiklansa (administrator) yoki hodim o‘chirilsa, Telegram ajraladi.
+
+**Parol va login**
+
+- **Parolni unutganda:** kirish sahifasida «Parolni unutdingizmi?» — hisobga ulangan Telegram'ga 6 xonali kod rasm bilan boradi. Kod 10 daqiqa amal qiladi, 5 marta xato kiritilsa yaroqsiz bo‘ladi va ishlatilgach chatdan o‘chadi. Telegram ulanmagan bo‘lsa, parolni administrator tiklaydi.
+- **Hisob ichida:** «Login va parol» oynasida login va parol joriy parol bilan almashtiriladi. Parol almashganda boshqa kirishlar yopiladi; Telegram qoladi, istasangiz shu yerda ajratiladi. Bot o‘zgarish haqida xabar beradi.
+
+**Mavzu:** kunduzgi yoki tungi mavzu hisobga yoziladi. Saytda almashtirilsa, web-app va bot rasmlari ham shu mavzuga o‘tadi; botdagi «Hisob» ekranida ham almashtiriladi.
+
+**Bot ekrani — doim toza chat**
+
+- Chatda bitta **bosh menyu** turadi: ish stolining rasmi (salom, raqamlar, hozirgi vazifalar) va ostida inline tugmalar. Pastki menyu (reply keyboard) yo‘q.
+- Tugma bosilganda **ish xabari** ochiladi; ro‘yxat, vazifa, statistika va hisob shu bitta xabarning ichida almashadi. Oxirgi amaldan 10 daqiqa o‘tib u o‘chadi.
+- **Xabarnomalar** alohida keladi va foydalanuvchi botga qaytgandan 10 daqiqa o‘tib o‘chadi (bot xabar o‘qilganini bilmaydi: botda biror narsa bosilishi «ko‘rdi» hisoblanadi). Hech ko‘rilmasa — bir kundan keyin. «Yopish» tugmasi darhol o‘chiradi.
+- «Yangi vazifa» xabari vazifani kimdir olishi bilan hammadan o‘chadi; bekor qilinsa ham.
+- Vazifa o‘zgarsa, hammaning bosh menyusi jimgina, bildirishnomasiz yangilanadi.
+- Foydalanuvchi yozgan xabarlar ham javobdan keyin o‘chadi.
+
+**Rasmli xabarlar:** bot matn emas, ilovaning o‘z ko‘rinishini yuboradi: macOS oynasi ichida bosh menyu, vazifa varag‘i, ro‘yxat, statistika, jamoa, hisob, kirish va tiklash kodi. Rasmlar serverda chiziladi (`src/lib/telegram/images.tsx`, uzbtrust ranglari va Inter). Pastki burchakda yulduz va «Abdurakhmonov» — dizayn tizimining rasm uchun muallif belgisi. Rasm chizilmasa, xabar oddiy matnda ketadi.
 
 **Botdagi ishlar**
 
 - Dizayner: amaldagi va ochiq vazifalar, «Men olaman», «Tugatdim», «Bo‘shatish», fayllarni olish, statistika.
-- PM: hozirgi vazifalar, tugmalar bilan yangi vazifa qo‘yish, bekor qilish, qayta ochish, dizaynerlar, statistika.
+- PM: hozirgi vazifalar, tugmalar bilan yangi vazifa qo‘yish (qo‘yishdan oldin oyna ko‘rsatiladi), dizaynerga eslatish, bekor qilish, qayta ochish, dizaynerlar, statistika.
 - Administrator: jamoa va statistika. Hodim qo‘shish web-app yoki saytda.
 
-**Rasmli xabarlar:** bot matn emas, ilovaning o‘z ko‘rinishini yuboradi: macOS oynasi ichida vazifa varag‘i, ish stoli ro‘yxati, statistika va jamoa. Rasmlar serverda chiziladi (`src/lib/telegram/images.tsx`, uzbtrust ranglari va Inter), tugmalar rasm ostida turadi. Ro‘yxatdagi tugma bosilsa, o‘sha xabarning o‘zida vazifa oynasi ochiladi. Rasm chizilmasa, xabar oddiy matnda ketadi.
-
 **Xabarnomalar:** yangi yoki qayta ochilgan vazifa dizaynerlarga boradi. PMga vazifa olingani, tugagani va bo‘shatilgani, dizaynerga bekor qilingani, o‘zgargani va muddati o‘zgargani haqida xabar keladi.
+
+**PM eslatmasi:** vazifa varag‘idagi «Eslatish» (saytda) yoki «Dizaynerga eslatish» (botda) dizaynerga bot orqali eslatma yuboradi; ochiq vazifada — hamma dizaynerlarga. Bitta vazifa 10 daqiqada bir martadan ko‘p eslatilmaydi.
 
 **Eslatmalar**
 
@@ -88,7 +106,7 @@ Ro‘yxatdan o‘tish faqat web-app yoki saytda. Parol o‘zgarsa, parol tiklans
 - Yangi olingan vazifa darhol eslatilmaydi: 24 soatlik uchun 4 soat, 3 soatlik uchun 1 soat kutiladi.
 - 22:00 dan 09:00 gacha yuborilmaydi, eslatma ertalab keladi.
 - «Hisob» bo‘limida eslatmalarni o‘chirish mumkin. Yangi vazifa xabarlari bunga kirmaydi.
-- Tekshiruvni [GitHub Actions](.github/workflows/reminders.yml) har 15 daqiqada ishga tushiradi, bot ishlatilganda ham tekshiriladi. Manzil ochiq, chunki u faqat vaqti kelgan eslatmani yuboradi va 5 daqiqada bir martadan ko‘p ishlamaydi. GitHub 60 kun faolligi yo‘q repoda rejali ishni o‘chirib qo‘yadi: shunda Actions sahifasidan qayta yoqiladi.
+- Tekshiruvni [GitHub Actions](.github/workflows/reminders.yml) har 5 daqiqada ishga tushiradi (u eskirgan xabarlarni ham o‘chiradi va bosh menyuni kun boshida yangilaydi), bot ishlatilganda ham tekshiriladi. Manzil ochiq, chunki u faqat vaqti kelgan eslatmani yuboradi va 5 daqiqada bir martadan ko‘p ishlamaydi. GitHub 60 kun faolligi yo‘q repoda rejali ishni o‘chirib qo‘yadi: shunda Actions sahifasidan qayta yoqiladi.
 
 **Ishga tushirish**
 

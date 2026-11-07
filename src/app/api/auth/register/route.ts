@@ -13,6 +13,7 @@ import {
 } from "@/lib/server";
 import { linkTelegram, telegramName, verifyInitData } from "@/lib/telegram/accounts";
 import { afterLinked } from "@/lib/telegram/bot";
+import { loadInitial } from "@/lib/initial";
 import type { Role } from "@/lib/types";
 
 export const runtime = "nodejs";
@@ -57,6 +58,6 @@ export async function POST(request: Request) {
       await linkTelegram({ id: telegram.id, name: telegramName(telegram), username: telegram.username }, account.id);
       after(() => afterLinked(telegram.id, account));
     }
-    return { user: account };
+    return { user: account, initial: await loadInitial(account) };
   });
 }

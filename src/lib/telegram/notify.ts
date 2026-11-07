@@ -1,7 +1,10 @@
 import { db } from "../db";
+import { themesOf, type Theme } from "../settings";
 import type { Account, Task } from "../types";
 import { inline, say, sendPhoto, telegramEnabled, type Keyboard } from "./api";
+import { refreshHomes } from "./home";
 import { taskSheetImage, type Lead } from "./images";
+import { dropNotices, track, type Kind } from "./screens";
 import { taskCaption, taskKeyboard, taskText } from "./views";
 
 export interface Recipient {
@@ -29,33 +32,49 @@ export async function recipient(memberId: string | null, role: "pm" | "designer"
 }
 
 /**
- * Bitta vazifa oynasini bir nechta odamga yuboradi. Rasm bir marta chiziladi va yuklanadi,
+ * Vazifa oynasini bir nechta odamga yuboradi. Rasm har mavzu uchun bir marta chiziladi va yuklanadi,
  * qolganlarga Telegram'dagi nusxasi ketadi. Rasm chizilmasa, xabar oddiy matnda boradi.
+ * kind «new» — vazifa olinganda hammadan olib tashlanadi.
  */
-export async function sendTask(people: Recipient[], task: Task, lead: Lead, keyboardFor = defaultKeyboard) {
-  if (!people.length) return;
-  const image = await taskSheetImage(task, lead).catch((error) => {
-    console.error("Telegram rasm:", error instanceof Error ? error.message : "xato");
-    return null;
-  });
-  let photo: Buffer | string | null = image;
+export async function sendTask(people: Recipient[], task: Task, lead: Lead, kind: Kind = "note", keyboardFor = defaultKeyboard) {
+  if (!people.length) return 0;
+  const themes = await themesOf(people.map((p) => p.id));
+  const photos = new Map<Theme, Buffer | string | null>();
+  let sent = 0;
   for (const person of people) {
+    const theme = themes.get(person.id) ?? "dark";
+    if (!photos.has(theme))
+      photos.set(
+        theme,
+        await taskSheetImage(task, lead, theme, 4).catch((error) => {
+          console.error("Telegram rasm:", error instanceof Error ? error.message : "xato");
+          return null;
+        }),
+      );
     const markup = inline(keyboardFor(task, person));
+    const photo = photos.get(theme);
     try {
       if (!photo) throw new Error("rasm yo‘q");
-      const sent = await sendPhoto(person.chat, photo, taskCaption(task, lead.text), markup);
-      photo = sent.photo?.at(-1)?.file_id || photo;
+      const message = await sendPhoto(person.chat, photo, taskCaption(task, lead.text), markup);
+      photos.set(theme, message.photo?.at(-1)?.file_id || photo);
+      await track(person.chat, message.message_id, kind, task.id);
+      sent += 1;
     } catch {
-      await say(person.chat, taskText(task, lead.text), markup);
+      const message = await say(person.chat, taskText(task, lead.text), markup);
+      if (message) {
+        await track(person.chat, message.message_id, kind, task.id);
+        sent += 1;
+      }
     }
   }
+  return sent;
 }
 
 function defaultKeyboard(task: Task, person: Recipient): Keyboard {
   return taskKeyboard(task, { id: person.id, role: person.role });
 }
 
-/** Vazifa o‘zgarganda kimga nima deyiladi. Xabar yuborilmasa ham ish to‘xtamaydi. */
+/** Vazifa o‘zgarganda kimga nima deyiladi. Keyin hammaning bosh menyusi jimgina yangilanadi. */
 export async function notifyTask(action: string, before: Task, task: Task, actor: Account, message = "") {
   if (!telegramEnabled()) return;
   const others = (person: Recipient | null) => (person && person.id !== actor.id ? [person] : []);
@@ -63,12 +82,14 @@ export async function notifyTask(action: string, before: Task, task: Task, actor
   const worker = async (id: string | null) => others(await recipient(id, "designer"));
   const reason = message ? `: ${message.slice(0, 60)}` : "";
   try {
+    // Olingan yoki yopilgan vazifaning «Yangi vazifa» xabari hech kimda qolmaydi.
+    if (["claim", "cancel", "deleted"].includes(action)) await dropNotices(task.id);
     switch (action) {
       case "created":
-        await sendTask(await designers(), task, { text: "Yangi vazifa", tone: "accent" });
+        await sendTask(await designers(), task, { text: "Yangi vazifa", tone: "accent" }, "new");
         break;
       case "reopen":
-        await sendTask(await designers(), task, { text: "Vazifa qayta ochildi", tone: "accent" });
+        await sendTask(await designers(), task, { text: "Vazifa qayta ochildi", tone: "accent" }, "new");
         break;
       case "claim":
         await sendTask(await owner(), task, { text: `${actor.name} vazifani oldi`, tone: "accent" });
@@ -80,7 +101,7 @@ export async function notifyTask(action: string, before: Task, task: Task, actor
       case "release":
         await sendTask(await owner(), task, { text: `${actor.name} vazifani bo‘shatdi`, tone: "warn" });
         await sendTask(await worker(before.assigneeId), task, { text: "Vazifa ochiq ro‘yxatga qaytarildi", tone: "warn" });
-        await sendTask(await designers(before.assigneeId), task, { text: "Vazifa yana ochiq", tone: "accent" });
+        await sendTask(await designers(before.assigneeId), task, { text: "Vazifa yana ochiq", tone: "accent" }, "new");
         break;
       case "cancel":
         await sendTask(await worker(before.assigneeId), task, { text: `Vazifa bekor qilindi${reason}`, tone: "bad" });
@@ -97,6 +118,7 @@ export async function notifyTask(action: string, before: Task, task: Task, actor
         await sendTask(await worker(task.assigneeId), task, { text: "Ishingiz qabul qilindi", tone: "good" });
         break;
     }
+    await refreshHomes();
   } catch (error) {
     console.error("Telegram xabarnoma:", error instanceof Error ? error.message : "xato");
   }

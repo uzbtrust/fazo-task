@@ -1,6 +1,6 @@
 import { dueLabel } from "../dates";
 import { roleInfo } from "../roles";
-import type { Account, Role, Task } from "../types";
+import type { Account, Task } from "../types";
 import { REVIEW_STEP, statusLabels } from "../workflow";
 import { action, escapeHtml, webApp, type Keyboard } from "./api";
 
@@ -12,20 +12,6 @@ export const LISTS: Record<ListKind, { title: string; empty: string }> = {
   live: { title: "Hozirgi vazifalar", empty: "Hozir ochiq ish yo‘q." },
   done: { title: "Tugagan vazifalar", empty: "Tugagan vazifa hali yo‘q." },
 };
-
-/** Pastki doimiy menyu: har rolning o‘z tugmalari. */
-export function mainKeyboard(role: Role) {
-  const rows: Record<Role, string[][]> = {
-    designer: [["Mening vazifalarim", "Ochiq vazifalar"], ["Statistika", "Hisob"]],
-    pm: [["Hozirgi vazifalar", "Yangi vazifa"], ["Dizaynerlar", "Statistika"], ["Hisob"]],
-    admin: [["Jamoa", "Statistika"], ["Hisob"]],
-  };
-  return {
-    keyboard: rows[role].map((row) => row.map((text) => ({ text }))),
-    resize_keyboard: true,
-    is_persistent: true,
-  };
-}
 
 const stars = (value: number | null) => (value ? "★".repeat(value) + "☆".repeat(5 - value) : "");
 const number = (task: Task) => `#${String(task.number).padStart(3, "0")}`;
@@ -66,7 +52,7 @@ export function taskText(task: Task, lead?: string) {
 
 const fileCount = (task: Task) => task.briefFiles.length + task.referenceFiles.length + task.resultFiles.length;
 
-/** Karta tugmalari: kim ko‘rayotgani va vazifa holatiga qarab. */
+/** Karta tugmalari: kim ko‘rayotgani va vazifa holatiga qarab. back — ro‘yxatga qaytish, aks holda «Yopish». */
 export function taskKeyboard(task: Task, account: Pick<Account, "id" | "role">, back?: ListKind): Keyboard {
   const rows: Keyboard = [];
   if (account.role === "designer") {
@@ -77,10 +63,11 @@ export function taskKeyboard(task: Task, account: Pick<Account, "id" | "role">, 
     }
   }
   if (account.role === "pm") {
+    const live = ["todo", "in_progress", "in_review"].includes(task.status);
+    if (live) rows.push([action(task.assigneeId ? "Dizaynerga eslatish" : "Dizaynerlarga eslatish", `nudge:${task.id}`, "primary")]);
     const manage = [];
     if (task.status === "in_progress") manage.push(action("Bo‘shatish", `rel:${task.id}`));
-    if (["todo", "in_progress", "in_review"].includes(task.status))
-      manage.push(action("Bekor qilish", `can:${task.id}`, "danger"));
+    if (live) manage.push(action("Bekor qilish", `can:${task.id}`, "danger"));
     if (task.status === "cancelled") manage.push(action("Qayta ochish", `re:${task.id}`));
     if (manage.length) rows.push(manage);
   }
@@ -88,7 +75,7 @@ export function taskKeyboard(task: Task, account: Pick<Account, "id" | "role">, 
     ...(fileCount(task) ? [action(`Fayllar (${fileCount(task)})`, `f:${task.id}`)] : []),
     webApp("Ilovada ochish", `/tg?task=${task.id}`),
   ]);
-  if (back) rows.push([action("Orqaga", `l:${back}:0`)]);
+  rows.push([back ? action("Orqaga", `l:${back}:0`) : action("Yopish", "x")]);
   return rows;
 }
 
@@ -100,10 +87,7 @@ export function taskButton(task: Task, kind: ListKind) {
 
 /** Rasm ostidagi qisqa matn: bildirishnomada va qidiruvda shu ko‘rinadi. */
 export function taskCaption(task: Task, lead?: string) {
-  const due = dueText(task);
-  return [lead ? `<b>${escapeHtml(lead)}</b>` : "", escapeHtml(task.title), due ? `Muddat: ${due}` : ""]
-    .filter(Boolean)
-    .join("\n");
+  return [lead ? `<b>${escapeHtml(lead)}</b>` : "", escapeHtml(task.title)].filter(Boolean).join(" · ");
 }
 
 export const accountLine = (account: Account) => `@${escapeHtml(account.username)} · ${roleInfo[account.role].label}`;

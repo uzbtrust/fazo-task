@@ -16,6 +16,23 @@ import { roleInfo } from "@/lib/roles";
 import { api, Avatar, ErrorMessage, Modal, Segmented, Signature, Spinner, Wordmark } from "./ui";
 import { storedInitData } from "./telegram-webapp";
 
+/** Hisobga yozilgan mavzu: Workspace beradi, Shell qo‘llaydi va boshqa qurilmadagi o‘zgarishni kuzatadi. */
+type Theme = "light" | "dark";
+const ThemeContext = createContext<Theme | null>(null);
+export function ThemeSync({ theme, children }: { theme: Theme | null; children: ReactNode }) {
+  return <ThemeContext.Provider value={theme}>{children}</ThemeContext.Provider>;
+}
+
+function applyTheme(theme: Theme | null) {
+  const dark = theme ? theme === "dark" : matchMedia("(prefers-color-scheme: dark)").matches;
+  document.documentElement.classList.toggle("dark", dark);
+  try {
+    if (theme) localStorage.setItem("fazo-theme", theme);
+    else localStorage.removeItem("fazo-theme");
+  } catch {}
+  return dark;
+}
+
 type Toast = { message: string; tone?: "error" };
 const ToastContext = createContext<(toast: Toast | string) => void>(() => {});
 export const useToast = () => useContext(ToastContext);
@@ -101,10 +118,24 @@ export function Shell<V extends string>({
 }) {
   const [dark, setDark] = useState(false);
   const [menu, setMenu] = useState(false);
-  const [passwordOpen, setPasswordOpen] = useState(false);
+  const [accountOpen, setAccountOpen] = useState(false);
   const menuRef = useRef<HTMLDivElement>(null);
   const notify = useToast();
-  useEffect(() => setDark(document.documentElement.classList.contains("dark")), []);
+  const saved = useContext(ThemeContext);
+  // Hisobdagi mavzu ustun: boshqa qurilmada tanlangani shu yerda ham bo‘ladi.
+  useEffect(() => {
+    setDark(saved ? applyTheme(saved) : document.documentElement.classList.contains("dark"));
+    if (window.location.hash === "#hisob") {
+      setAccountOpen(true);
+      history.replaceState(null, "", window.location.pathname);
+    }
+  }, [saved]);
+  const syncTheme = useCallback(async () => {
+    const data = await api<{ theme: Theme | null }>("/api/me");
+    const dark = document.documentElement.classList.contains("dark");
+    if (data.theme && (data.theme === "dark") !== dark) setDark(applyTheme(data.theme));
+  }, []);
+  usePolling(syncTheme);
   useEffect(() => {
     if (!menu) return;
     const close = (e: MouseEvent | KeyboardEvent) => {
@@ -121,13 +152,9 @@ export function Shell<V extends string>({
 
   function toggleTheme() {
     const next = !dark;
-    const apply = () => {
-      setDark(next);
-      document.documentElement.classList.toggle("dark", next);
-    };
-    try {
-      localStorage.setItem("fazo-theme", next ? "dark" : "light");
-    } catch {}
+    const apply = () => setDark(applyTheme(next ? "dark" : "light"));
+    // Hisobga yoziladi: web-app, boshqa brauzer va bot rasmlari ham almashadi.
+    void api("/api/me/settings", { method: "PUT", body: JSON.stringify({ theme: next ? "dark" : "light" }) }).catch(() => {});
     const doc = document as Document & { startViewTransition?: (cb: () => void) => void };
     if (doc.startViewTransition && !matchMedia("(prefers-reduced-motion: reduce)").matches)
       doc.startViewTransition(apply);
@@ -197,11 +224,11 @@ export function Shell<V extends string>({
                       className="menu-item"
                       onClick={() => {
                         setMenu(false);
-                        setPasswordOpen(true);
+                        setAccountOpen(true);
                       }}
                     >
                       <KeyRound size={16} strokeWidth={1.8} aria-hidden="true" />
-                      Parolni almashtirish
+                      Login va parol
                     </button>
                     <TelegramItem onDone={() => setMenu(false)} />
                     <button type="button" role="menuitem" className="menu-item" onClick={() => void logout()}>
@@ -223,13 +250,14 @@ export function Shell<V extends string>({
           <span>Jamoa ishlari bir joyda.</span>
           <Signature />
         </footer>
-        {passwordOpen && (
-          <PasswordDialog
+        {accountOpen && (
+          <AccountDialog
             account={account}
-            onClose={() => setPasswordOpen(false)}
-            onSaved={() => {
-              setPasswordOpen(false);
-              notify("Parol yangilandi");
+            onClose={() => setAccountOpen(false)}
+            onSaved={(what) => {
+              setAccountOpen(false);
+              notify(what === "password" ? "Parol yangilandi" : "Login yangilandi");
+              if (what === "login") setTimeout(() => window.location.reload(), 900);
             }}
           />
         )}
@@ -282,25 +310,30 @@ function TelegramItem({ onDone }: { onDone: () => void }) {
   );
 }
 
-function PasswordDialog({
-  account,
-  onClose,
-  onSaved,
-}: {
-  account: Account;
-  onClose: () => void;
-  onSaved: () => void;
-}) {
+type AccountTab = "password" | "login";
+
+/** Login va parol: ikkalasi ham joriy parol bilan almashtiriladi. */
+function AccountDialog({ account, onClose, onSaved }: { account: Account; onClose: () => void; onSaved: (what: AccountTab) => void }) {
   const formId = useId();
+  const [tab, setTab] = useState<AccountTab>("password");
   const [current, setCurrent] = useState("");
   const [password, setPassword] = useState("");
   const [repeat, setRepeat] = useState("");
+  const [login, setLogin] = useState(account.username);
+  const [unlink, setUnlink] = useState(false);
+  const [telegram, setTelegram] = useState<string | null>(null);
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState("");
+  useEffect(() => {
+    api<{ telegram: { name: string } | null }>("/api/me/telegram").then(
+      (data) => setTelegram(data.telegram?.name || null),
+      () => {},
+    );
+  }, []);
   async function save(e: FormEvent) {
     e.preventDefault();
     setError("");
-    if (password !== repeat) {
+    if (tab === "password" && password !== repeat) {
       setError("Yangi parollar mos kelmadi.");
       return;
     }
@@ -308,30 +341,67 @@ function PasswordDialog({
     try {
       await api("/api/me", {
         method: "PATCH",
-        body: JSON.stringify({ currentPassword: current, newPassword: password }),
+        body: JSON.stringify(
+          tab === "password"
+            ? { currentPassword: current, newPassword: password, unlinkTelegram: unlink }
+            : { currentPassword: current, newUsername: login },
+        ),
       });
-      onSaved();
+      onSaved(tab);
     } catch (e) {
       setError((e as Error).message);
       setBusy(false);
     }
   }
   return (
-    <Modal title="Parolni almashtirish" eyebrow={`Hisob · @${account.username}`} onClose={onClose} size="sm">
+    <Modal title="Login va parol" eyebrow={`Hisob · @${account.username}`} onClose={onClose} size="sm">
       <form id={formId} className="sheet-body form" onSubmit={save}>
+        <Segmented<AccountTab>
+          label="Nimani almashtirish"
+          className="segmented-block"
+          value={tab}
+          onChange={(next) => {
+            setTab(next);
+            setError("");
+          }}
+          options={[
+            { value: "password", label: "Parol" },
+            { value: "login", label: "Login" },
+          ]}
+        />
+        {tab === "login" && (
+          <label className="field">
+            <span className="field-label">Yangi login</span>
+            <input className="input" autoComplete="username" autoCapitalize="none" spellCheck={false} value={login} onChange={(e) => setLogin(e.target.value)} minLength={3} maxLength={32} required />
+            <span className="field-hint">Lotin harflari, raqam, nuqta, chiziqcha. Keyingi safar shu login bilan kirasiz.</span>
+          </label>
+        )}
         <label className="field">
           <span className="field-label">Joriy parol</span>
           <input className="input" type="password" autoComplete="current-password" value={current} onChange={(e) => setCurrent(e.target.value)} required />
         </label>
-        <label className="field">
-          <span className="field-label">Yangi parol</span>
-          <input className="input" type="password" autoComplete="new-password" placeholder="Kamida 8 ta belgi" value={password} onChange={(e) => setPassword(e.target.value)} minLength={8} maxLength={128} required />
-        </label>
-        <label className="field">
-          <span className="field-label">Yangi parolni takrorlang</span>
-          <input className="input" type="password" autoComplete="new-password" value={repeat} onChange={(e) => setRepeat(e.target.value)} minLength={8} maxLength={128} required />
-        </label>
-        <p className="field-hint">Boshqa qurilmalardagi kirishlar bekor qilinadi.</p>
+        {tab === "password" && (
+          <>
+            <label className="field">
+              <span className="field-label">Yangi parol</span>
+              <input className="input" type="password" autoComplete="new-password" placeholder="Kamida 8 ta belgi" value={password} onChange={(e) => setPassword(e.target.value)} minLength={8} maxLength={128} required />
+            </label>
+            <label className="field">
+              <span className="field-label">Yangi parolni takrorlang</span>
+              <input className="input" type="password" autoComplete="new-password" value={repeat} onChange={(e) => setRepeat(e.target.value)} minLength={8} maxLength={128} required />
+            </label>
+            {telegram && (
+              <label className="check-row">
+                <input type="checkbox" checked={unlink} onChange={(e) => setUnlink(e.target.checked)} />
+                <span>
+                  Telegram'ni ham ajratish
+                  <small>{`Hozir ulangan: ${telegram}. Siz ulamagan bo‘lsangiz, belgilang.`}</small>
+                </span>
+              </label>
+            )}
+            <p className="field-hint">Boshqa qurilmalardagi kirishlar yopiladi.</p>
+          </>
+        )}
         <ErrorMessage message={error} />
       </form>
       <div className="sheet-foot">

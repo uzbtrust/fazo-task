@@ -1,7 +1,11 @@
+import { after } from "next/server";
 import { requireUser } from "@/lib/auth";
 import { db } from "@/lib/db";
 import { api, ApiError, checkOrigin, readBody } from "@/lib/server";
 import { runTaskAction } from "@/lib/task-actions";
+import { telegramEnabled } from "@/lib/telegram/api";
+import { refreshHomes } from "@/lib/telegram/home";
+import { dropNotices } from "@/lib/telegram/screens";
 export const runtime = "nodejs";
 
 export async function PATCH(
@@ -34,6 +38,11 @@ export async function DELETE(
       "write",
     );
     if (result[0].rowsAffected !== 1) throw new ApiError(404, "Vazifa topilmadi.");
+    if (telegramEnabled())
+      after(async () => {
+        await dropNotices(id);
+        await refreshHomes();
+      });
     return { ok: true };
   });
 }

@@ -47,7 +47,7 @@ TEST_DB=/tmp/fazo-test.db npm run test:telegram
 
 `TEST_DB` lets the reminder checks move times in the database; without it they are skipped, and they are also skipped at night (Tashkent). Image messages are checked by what the fake API receives, so look at the pictures themselves after changing `src/lib/telegram/images.tsx`.
 
-It covers every sign-in path (in-chat login and password, web-app, one-time browser link, connecting from the site, Telegram login on the site), forged and expired `initData`, single-use links, task notifications, bot buttons, the PM task wizard, image messages opening in place, reminders with their single delivery and muting, file delivery and access rules, and sign-out. A real device still has to be checked once after deployment: the Mini App opening, the menu button and `openLink`.
+It covers every sign-in path (in-chat login and password, web-app, one-time browser link, connecting from the site, Telegram login on the site), forged and expired `initData`, single-use links, task notifications, bot buttons, the PM task wizard, the home message and the single work message, new-task notices disappearing for everyone once someone claims, deletion of seen notices and idle work messages, the one-time chat cleanup, PM reminders and their 10-minute limit, password recovery by Telegram code, login and password changes, theme sync to the bot images, reminders, file delivery and access rules, and sign-out. A real device still has to be checked once after deployment: the Mini App opening, the menu button and `openLink`.
 
 Remote fixture execution requires `TEST_ALLOW_REMOTE=1`. Set it only for the intended deployment.
 

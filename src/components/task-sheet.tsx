@@ -1,6 +1,6 @@
 "use client";
 import { useState } from "react";
-import { ArrowRight, Ban, Check, CornerUpLeft, Hand, Pencil, RotateCcw, Trash2, Undo2 } from "lucide-react";
+import { ArrowRight, Ban, Bell, Check, CornerUpLeft, Hand, Pencil, RotateCcw, Trash2, Undo2 } from "lucide-react";
 import type { Account, FileMeta, Task } from "@/lib/types";
 import { REVIEW_STEP } from "@/lib/workflow";
 import {
@@ -97,6 +97,20 @@ export function TaskSheet({
   const cancelled = task.status === "cancelled" ? [...task.events].reverse().find((e) => e.action === "cancel") : null;
   const images = task.resultFiles.filter(isImage).length;
   const step = STATUS_ORDER.indexOf(task.status);
+
+  const [reminding, setReminding] = useState(false);
+  /** PM dizaynerga bot orqali eslatadi (ochiq vazifa — hamma dizaynerlarga). */
+  async function remind() {
+    setReminding(true);
+    try {
+      const data = await api<{ sent: number }>(`/api/tasks/${task.id}/remind`, { method: "POST" });
+      notify(task.assigneeId ? "Dizaynerga eslatma yuborildi" : `Eslatma ${data.sent} ta dizaynerga yuborildi`);
+    } catch (e) {
+      notify({ message: (e as Error).message, tone: "error" });
+    } finally {
+      setReminding(false);
+    }
+  }
 
   async function act(action: string, done: string) {
     setBusy(true);
@@ -397,6 +411,12 @@ export function TaskSheet({
             <button type="button" className="btn-text is-danger" onClick={() => open("cancel")}>
               <Ban size={15} strokeWidth={1.9} aria-hidden="true" />
               Bekor qilish
+            </button>
+          )}
+          {isPm && canCancel && !composer && (
+            <button type="button" className="btn-text" disabled={reminding} onClick={() => void remind()}>
+              <Bell size={15} strokeWidth={1.9} aria-hidden="true" />
+              Eslatish
             </button>
           )}
           {canRelease && !composer && (
