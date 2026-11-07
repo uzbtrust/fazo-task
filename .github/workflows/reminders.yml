@@ -1,0 +1,14 @@
+name: Eslatmalar
+
+# Telegram eslatmalarini tekshiradi. Sir kerak emas: sayt faqat vaqti kelgan eslatmani yuboradi.
+on:
+  schedule:
+    - cron: "*/15 * * * *"
+  workflow_dispatch:
+
+jobs:
+  sweep:
+    runs-on: ubuntu-latest
+    timeout-minutes: 3
+    steps:
+      - run: curl -fsS --max-time 90 https://fazo-task.vercel.app/api/telegram/cron

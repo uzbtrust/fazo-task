@@ -1,7 +1,10 @@
 import { timingSafeEqual } from "node:crypto";
+import { after } from "next/server";
 import { telegramEnabled, webhookSecret } from "@/lib/telegram/api";
 import { handleUpdate, type Update } from "@/lib/telegram/bot";
+import { sweep } from "@/lib/telegram/reminders";
 export const runtime = "nodejs";
+export const maxDuration = 60;
 
 /** Telegram'dan keladi. Javob doim 200: xato bo‘lsa, Telegram bir xil xabarni qayta yubormasin. */
 export async function POST(request: Request) {
@@ -15,5 +18,7 @@ export async function POST(request: Request) {
   } catch (error) {
     console.error("Telegram bot:", error instanceof Error ? error.message : "xato");
   }
+  // Rejali tekshiruv kechiksa ham, bot ishlatilganda eslatmalar yetib boradi.
+  after(() => sweep().catch(() => {}));
   return new Response(null, { status: 200 });
 }

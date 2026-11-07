@@ -1,6 +1,8 @@
 import type { NextConfig } from "next";
 const config: NextConfig = {
   poweredByHeader: false,
+  // Telegram rasmlari uchun shriftlar: serverda fayldan o‘qiladi.
+  outputFileTracingIncludes: { "/*": ["src/lib/telegram/fonts/**/*"] },
   async headers() {
     return [
       {

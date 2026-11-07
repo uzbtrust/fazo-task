@@ -10,9 +10,9 @@ import {
 } from "react";
 import { LoaderCircle, Star, X } from "lucide-react";
 import type { Priority, TaskStatus } from "@/lib/types";
-import { REVIEW_STEP, statusLabels } from "@/lib/workflow";
+import { STATUS_ORDER, statusLabels } from "@/lib/workflow";
 
-export { statusLabels };
+export { STATUS_ORDER, statusLabels };
 export { givenName } from "@/lib/roles";
 export {
   addDaysISO,
@@ -26,10 +26,6 @@ export {
   todayEyebrow,
   todayISO,
 } from "@/lib/dates";
-/** Vazifa bosqichlari (bekor qilish bosqich emas). Tekshiruv faqat yoqilganda. */
-export const STATUS_ORDER: TaskStatus[] = REVIEW_STEP
-  ? ["todo", "in_progress", "in_review", "done"]
-  : ["todo", "in_progress", "done"];
 
 export async function api<T>(
   url: string,

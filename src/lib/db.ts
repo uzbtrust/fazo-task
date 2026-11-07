@@ -30,7 +30,8 @@ async function initialize(): Promise<Client> {
   if (process.env.VERCEL && url.startsWith("file:")) {
     throw new Error("Production requires a durable remote TURSO_DATABASE_URL.");
   }
-  client ??= createClient({ url, authToken: process.env.TURSO_AUTH_TOKEN });
+  // timeout faqat lokal bazaga ta’sir qiladi: ikki yozuv to‘qnashsa, xato o‘rniga navbat kutiladi.
+  client ??= createClient({ url, authToken: process.env.TURSO_AUTH_TOKEN, timeout: 5000 });
   // Rol va holatlar kodda tekshiriladi: yangi kasb yoki bosqich qo‘shilganda
   // jadvalni qayta qurish shart emas. Eski users/tasks/employees jadvallariga tegilmaydi.
   // Sovuq startda hammasi bitta so‘rovda: jadvallar va administrator borligi.
@@ -84,6 +85,9 @@ async function initialize(): Promise<Client> {
       member_id TEXT, browser_hash TEXT, device TEXT, status TEXT NOT NULL DEFAULT 'pending', expires_at TEXT NOT NULL
     )`,
       "CREATE INDEX IF NOT EXISTS telegram_tokens_browser ON telegram_tokens(browser_hash)",
+      // Eslatmalar: har biri bir marta yuboriladi; o‘chirib qo‘yganlar alohida.
+      "CREATE TABLE IF NOT EXISTS telegram_reminders (key TEXT PRIMARY KEY, sent_at TEXT NOT NULL)",
+      "CREATE TABLE IF NOT EXISTS telegram_muted (telegram_id TEXT PRIMARY KEY)",
       "CREATE INDEX IF NOT EXISTS member_sessions_expiry ON member_sessions(expires_at)",
       "CREATE INDEX IF NOT EXISTS assignments_assignee ON assignments(assignee_id,status)",
       "CREATE INDEX IF NOT EXISTS attachments_assignment ON attachments(assignment_id)",

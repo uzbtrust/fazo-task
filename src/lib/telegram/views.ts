@@ -95,7 +95,15 @@ export function taskKeyboard(task: Task, account: Pick<Account, "id" | "role">, 
 /** Ro‘yxatdagi bitta tugma: nom va muddat. */
 export function taskButton(task: Task, kind: ListKind) {
   const due = dueText(task);
-  return [action(`${cut(task.title, 34)}${due ? ` · ${due}` : ""}`, `t:${task.id}:${kind}`)];
+  return [action(`${cut(task.title, 30)}${due ? ` · ${due}` : ""}`, `t:${task.id}:${kind}`)];
+}
+
+/** Rasm ostidagi qisqa matn: bildirishnomada va qidiruvda shu ko‘rinadi. */
+export function taskCaption(task: Task, lead?: string) {
+  const due = dueText(task);
+  return [lead ? `<b>${escapeHtml(lead)}</b>` : "", escapeHtml(task.title), due ? `Muddat: ${due}` : ""]
+    .filter(Boolean)
+    .join("\n");
 }
 
 export const accountLine = (account: Account) => `@${escapeHtml(account.username)} · ${roleInfo[account.role].label}`;

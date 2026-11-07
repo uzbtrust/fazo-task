@@ -120,6 +120,47 @@ export async function edit(chatId: string | number, messageId: number, text: str
   }
 }
 
+export interface SentPhoto extends Sent {
+  photo?: { file_id: string }[];
+}
+
+/** Rasm yuboradi: fayl yoki avval yuklangan file_id. Bir xil rasm har odamga qayta yuklanmaydi. */
+export async function sendPhoto(chatId: string | number, photo: Buffer | string, caption: string, markup?: unknown) {
+  const fields = { chat_id: String(chatId), caption, parse_mode: "HTML" };
+  if (typeof photo === "string")
+    return tg<SentPhoto>("sendPhoto", { ...fields, photo, ...(markup ? { reply_markup: markup } : {}) });
+  const form = new FormData();
+  for (const [key, value] of Object.entries(fields)) form.set(key, value);
+  if (markup) form.set("reply_markup", JSON.stringify(markup));
+  form.set("photo", new Blob([new Uint8Array(photo)], { type: "image/png" }), "fazo-task.png");
+  return request<SentPhoto>("sendPhoto", { body: form });
+}
+
+/** Xabardagi rasmni almashtiradi: ro‘yxatdan vazifa oynasiga o‘tish va orqaga qaytish shu. */
+export function editPhoto(chatId: number, messageId: number, image: Buffer, caption: string, keyboard: Keyboard) {
+  const form = new FormData();
+  form.set("chat_id", String(chatId));
+  form.set("message_id", String(messageId));
+  form.set("media", JSON.stringify({ type: "photo", media: "attach://image", caption, parse_mode: "HTML" }));
+  form.set("reply_markup", JSON.stringify({ inline_keyboard: keyboard }));
+  form.set("image", new Blob([new Uint8Array(image)], { type: "image/png" }), "fazo-task.png");
+  return request("editMessageMedia", { body: form });
+}
+
+export async function editCaption(chatId: number, messageId: number, caption: string, keyboard?: Keyboard) {
+  try {
+    await tg("editMessageCaption", {
+      chat_id: chatId,
+      message_id: messageId,
+      caption,
+      parse_mode: "HTML",
+      reply_markup: { inline_keyboard: keyboard || [] },
+    });
+  } catch (error) {
+    if (!(error instanceof TelegramError) || !/not modified/i.test(error.message)) throw error;
+  }
+}
+
 export const inline = (keyboard: Keyboard) => ({ inline_keyboard: keyboard });
 export const webApp = (text: string, path: string) => ({ text, web_app: { url: `${appUrl()}${path}` } });
 export const link = (text: string, url: string) => ({ text, url });

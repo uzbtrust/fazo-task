@@ -1,77 +1,100 @@
 import { db } from "../db";
 import type { Account, Task } from "../types";
-import { inline, say, telegramEnabled } from "./api";
-import { taskKeyboard, taskText } from "./views";
+import { inline, say, sendPhoto, telegramEnabled, type Keyboard } from "./api";
+import { taskSheetImage, type Lead } from "./images";
+import { taskCaption, taskKeyboard, taskText } from "./views";
 
-async function designers(except?: string | null) {
+export interface Recipient {
+  chat: string;
+  id: string;
+  role: "pm" | "designer";
+}
+
+export async function designers(except?: string | null): Promise<Recipient[]> {
   const rows = (
     await (await db()).execute(`SELECT t.telegram_id,m.id FROM telegram_accounts t JOIN members m ON m.id=t.member_id
       WHERE m.role='designer' AND m.deleted_at IS NULL AND m.password_hash IS NOT NULL`)
   ).rows;
   return rows
     .filter((row) => row.id !== except)
-    .map((row) => ({ chat: String(row.telegram_id), id: String(row.id) }));
+    .map((row) => ({ chat: String(row.telegram_id), id: String(row.id), role: "designer" }));
 }
 
-async function chatOf(memberId: string | null) {
+export async function recipient(memberId: string | null, role: "pm" | "designer"): Promise<Recipient | null> {
   if (!memberId) return null;
   const row = (
     await (await db()).execute({ sql: "SELECT telegram_id FROM telegram_accounts WHERE member_id=?", args: [memberId] })
   ).rows[0];
-  return row ? String(row.telegram_id) : null;
+  return row ? { chat: String(row.telegram_id), id: memberId, role } : null;
 }
 
-/** Bitta odamga vazifa kartasi. Bog‘lanmagan bo‘lsa yoki amalni o‘zi qilgan bo‘lsa, xabar yuborilmaydi. */
-async function tell(memberId: string | null, role: "pm" | "designer", task: Task, lead: string, actor: Account) {
-  if (!memberId || memberId === actor.id) return;
-  const chat = await chatOf(memberId);
-  if (chat) await say(chat, taskText(task, lead), inline(taskKeyboard(task, { id: memberId, role })));
+/**
+ * Bitta vazifa oynasini bir nechta odamga yuboradi. Rasm bir marta chiziladi va yuklanadi,
+ * qolganlarga Telegram'dagi nusxasi ketadi. Rasm chizilmasa, xabar oddiy matnda boradi.
+ */
+export async function sendTask(people: Recipient[], task: Task, lead: Lead, keyboardFor = defaultKeyboard) {
+  if (!people.length) return;
+  const image = await taskSheetImage(task, lead).catch((error) => {
+    console.error("Telegram rasm:", error instanceof Error ? error.message : "xato");
+    return null;
+  });
+  let photo: Buffer | string | null = image;
+  for (const person of people) {
+    const markup = inline(keyboardFor(task, person));
+    try {
+      if (!photo) throw new Error("rasm yo‘q");
+      const sent = await sendPhoto(person.chat, photo, taskCaption(task, lead.text), markup);
+      photo = sent.photo?.at(-1)?.file_id || photo;
+    } catch {
+      await say(person.chat, taskText(task, lead.text), markup);
+    }
+  }
 }
 
-async function tellDesigners(task: Task, lead: string, except?: string | null) {
-  const list = await designers(except);
-  await Promise.all(
-    list.map((designer) =>
-      say(designer.chat, taskText(task, lead), inline(taskKeyboard(task, { id: designer.id, role: "designer" }))),
-    ),
-  );
+function defaultKeyboard(task: Task, person: Recipient): Keyboard {
+  return taskKeyboard(task, { id: person.id, role: person.role });
 }
 
 /** Vazifa o‘zgarganda kimga nima deyiladi. Xabar yuborilmasa ham ish to‘xtamaydi. */
 export async function notifyTask(action: string, before: Task, task: Task, actor: Account, message = "") {
   if (!telegramEnabled()) return;
-  const reason = message ? `\nIzoh: ${message}` : "";
+  const others = (person: Recipient | null) => (person && person.id !== actor.id ? [person] : []);
+  const owner = async () => others(await recipient(task.createdBy, "pm"));
+  const worker = async (id: string | null) => others(await recipient(id, "designer"));
+  const reason = message ? `: ${message.slice(0, 60)}` : "";
   try {
     switch (action) {
       case "created":
-        await tellDesigners(task, "Yangi vazifa");
+        await sendTask(await designers(), task, { text: "Yangi vazifa", tone: "accent" });
         break;
       case "reopen":
-        await tellDesigners(task, "Vazifa qayta ochildi");
+        await sendTask(await designers(), task, { text: "Vazifa qayta ochildi", tone: "accent" });
         break;
       case "claim":
-        await tell(task.createdBy, "pm", task, `${actor.name} vazifani oldi`, actor);
+        await sendTask(await owner(), task, { text: `${actor.name} vazifani oldi`, tone: "accent" });
         break;
       case "complete":
       case "submit":
-        await tell(task.createdBy, "pm", task, `${actor.name} ishni tugatdi`, actor);
+        await sendTask(await owner(), task, { text: `${actor.name} ishni tugatdi`, tone: "good" });
         break;
       case "release":
-        await tell(task.createdBy, "pm", task, `${actor.name} vazifani bo‘shatdi`, actor);
-        await tell(before.assigneeId, "designer", task, "Vazifa ochiq ro‘yxatga qaytarildi", actor);
-        await tellDesigners(task, "Vazifa yana ochiq", before.assigneeId);
+        await sendTask(await owner(), task, { text: `${actor.name} vazifani bo‘shatdi`, tone: "warn" });
+        await sendTask(await worker(before.assigneeId), task, { text: "Vazifa ochiq ro‘yxatga qaytarildi", tone: "warn" });
+        await sendTask(await designers(before.assigneeId), task, { text: "Vazifa yana ochiq", tone: "accent" });
         break;
       case "cancel":
-        await tell(before.assigneeId, "designer", task, `Vazifa bekor qilindi${reason}`, actor);
+        await sendTask(await worker(before.assigneeId), task, { text: `Vazifa bekor qilindi${reason}`, tone: "bad" });
         break;
-      case "edit":
-        await tell(task.assigneeId, "designer", task, "Vazifa o‘zgartirildi", actor);
+      case "edit": {
+        const moved = before.dueDate !== task.dueDate || before.dueTime !== task.dueTime;
+        await sendTask(await worker(task.assigneeId), task, { text: moved ? "Muddat o‘zgardi" : "Vazifa o‘zgartirildi", tone: moved ? "warn" : "accent" });
         break;
+      }
       case "return":
-        await tell(task.assigneeId, "designer", task, `Vazifa qayta ishlashga qaytdi${reason}`, actor);
+        await sendTask(await worker(task.assigneeId), task, { text: `Qayta ishlashga qaytdi${reason}`, tone: "warn" });
         break;
       case "accept":
-        await tell(task.assigneeId, "designer", task, "Ishingiz qabul qilindi", actor);
+        await sendTask(await worker(task.assigneeId), task, { text: "Ishingiz qabul qilindi", tone: "good" });
         break;
     }
   } catch (error) {

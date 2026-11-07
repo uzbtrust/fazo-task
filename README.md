@@ -68,7 +68,27 @@ Ro‘yxatdan o‘tish faqat web-app yoki saytda. Parol o‘zgarsa, parol tiklans
 - PM: hozirgi vazifalar, tugmalar bilan yangi vazifa qo‘yish, bekor qilish, qayta ochish, dizaynerlar, statistika.
 - Administrator: jamoa va statistika. Hodim qo‘shish web-app yoki saytda.
 
-**Xabarnomalar:** yangi yoki qayta ochilgan vazifa dizaynerlarga boradi. PMga vazifa olingani, tugagani va bo‘shatilgani, dizaynerga bekor qilingani va o‘zgargani haqida xabar keladi.
+**Rasmli xabarlar:** bot matn emas, ilovaning o‘z ko‘rinishini yuboradi: macOS oynasi ichida vazifa varag‘i, ish stoli ro‘yxati, statistika va jamoa. Rasmlar serverda chiziladi (`src/lib/telegram/images.tsx`, uzbtrust ranglari va Inter), tugmalar rasm ostida turadi. Ro‘yxatdagi tugma bosilsa, o‘sha xabarning o‘zida vazifa oynasi ochiladi. Rasm chizilmasa, xabar oddiy matnda ketadi.
+
+**Xabarnomalar:** yangi yoki qayta ochilgan vazifa dizaynerlarga boradi. PMga vazifa olingani, tugagani va bo‘shatilgani, dizaynerga bekor qilingani, o‘zgargani va muddati o‘zgargani haqida xabar keladi.
+
+**Eslatmalar**
+
+| Qachon | Kimga |
+|---|---|
+| Har kuni 09:00 dan keyin (yakshanbadan tashqari): «Xayrli tong» va bugungi ishlar | Dizayner, PM |
+| Muddatga 24 soat qolganda | Vazifadagi dizayner |
+| Muddatga 3 soat qolganda | Vazifadagi dizayner |
+| Muddat o‘tganda | Dizayner va PM |
+| Ochiq vazifani 3 soat hech kim olmaganda | Dizaynerlar |
+| Muddat yaqin, vazifa hali ochiq | Dizaynerlar va PM |
+| Muddat o‘tdi, vazifa hali ochiq | PM |
+
+- Har bir eslatma bir marta keladi; muddat o‘zgarsa, qayta ishlaydi.
+- Yangi olingan vazifa darhol eslatilmaydi: 24 soatlik uchun 4 soat, 3 soatlik uchun 1 soat kutiladi.
+- 22:00 dan 09:00 gacha yuborilmaydi, eslatma ertalab keladi.
+- «Hisob» bo‘limida eslatmalarni o‘chirish mumkin. Yangi vazifa xabarlari bunga kirmaydi.
+- Tekshiruvni [GitHub Actions](.github/workflows/reminders.yml) har 15 daqiqada ishga tushiradi, bot ishlatilganda ham tekshiriladi. Manzil ochiq, chunki u faqat vaqti kelgan eslatmani yuboradi va 5 daqiqada bir martadan ko‘p ishlamaydi. GitHub 60 kun faolligi yo‘q repoda rejali ishni o‘chirib qo‘yadi: shunda Actions sahifasidan qayta yoqiladi.
 
 **Ishga tushirish**
 
