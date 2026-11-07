@@ -34,12 +34,17 @@ async function request<T>(method: string, init: RequestInit, retry = true): Prom
   });
   const data = (await response.json().catch(() => ({}))) as {
     ok?: boolean;
-    result?: T;
+    result?: T & { has_protected_content?: boolean };
     error_code?: number;
     description?: string;
     parameters?: { retry_after?: number };
   };
-  if (data.ok) return data.result as T;
+  if (data.ok) {
+    // Bot xabarlari himoyalanmaydi: skrinshot va ulashish mumkin. Telegram boshqacha qaytarsa — logda ko‘rinadi.
+    if (data.result && typeof data.result === "object" && data.result.has_protected_content)
+      console.warn(`Telegram ${method}: xabar himoyalangan holda keldi`);
+    return data.result as T;
+  }
   const after = data.parameters?.retry_after;
   if (data.error_code === 429 && retry && after && after <= 5) {
     await wait(after * 1000);
@@ -58,6 +63,7 @@ export function tg<T = unknown>(method: string, params: Record<string, unknown> 
 export function sendFile(chatId: string | number, name: string, mime: string, bytes: Buffer, caption?: string) {
   const form = new FormData();
   form.set("chat_id", String(chatId));
+  form.set("protect_content", "false");
   form.set("document", new Blob([new Uint8Array(bytes)], { type: mime }), name);
   if (caption) form.set("caption", caption);
   return request("sendDocument", { body: form });
@@ -94,6 +100,7 @@ export async function say(chatId: string | number, text: string, markup?: unknow
       chat_id: chatId,
       text,
       parse_mode: "HTML",
+      protect_content: false,
       link_preview_options: { is_disabled: true },
       ...(markup ? { reply_markup: markup } : {}),
       ...extra,
@@ -129,9 +136,21 @@ export interface SentPhoto extends Sent {
  * silent — ovozsiz (bosh menyu va tozalash), xabarnoma emas.
  */
 export async function sendPhoto(chatId: string | number, photo: Buffer | string, caption: string, markup?: unknown, silent = false) {
-  const fields = { chat_id: String(chatId), caption, parse_mode: "HTML", ...(silent ? { disable_notification: "true" } : {}) };
+  const fields = {
+    chat_id: String(chatId),
+    caption,
+    parse_mode: "HTML",
+    protect_content: "false",
+    ...(silent ? { disable_notification: "true" } : {}),
+  };
   if (typeof photo === "string")
-    return tg<SentPhoto>("sendPhoto", { ...fields, disable_notification: silent, photo, ...(markup ? { reply_markup: markup } : {}) });
+    return tg<SentPhoto>("sendPhoto", {
+      ...fields,
+      protect_content: false,
+      disable_notification: silent,
+      photo,
+      ...(markup ? { reply_markup: markup } : {}),
+    });
   const form = new FormData();
   for (const [key, value] of Object.entries(fields)) form.set(key, value);
   if (markup) form.set("reply_markup", JSON.stringify(markup));
